@@ -1,14 +1,16 @@
-using System.Text.Json;
 using Dapper;
-using RutaViva.Application;
-using RutaViva.Application.Maintenance;
-using RutaViva.Infrastructure;
+using MediatR;
+using RutaViva.Application.Abstractions.Time;
+using RutaViva.Application.MaintenanceRoutines.Commands.EvaluateDueMaintenance;
+using RutaViva.Application.Messaging;
 using RutaViva.Infrastructure.Persistence;
+using RutaViva.Infrastructure.Persistence.Connections;
 using RutaViva.Infrastructure.Persistence.Rows;
 
 namespace RutaViva.Api;
 
-public sealed class MaintenanceWorker(IServiceScopeFactory scopes, ILogger<MaintenanceWorker> logger) : BackgroundService
+public sealed class MaintenanceWorker(IServiceScopeFactory scopes, ILogger<MaintenanceWorker> logger)
+    : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -19,16 +21,15 @@ public sealed class MaintenanceWorker(IServiceScopeFactory scopes, ILogger<Maint
             {
                 await using var scope = scopes.CreateAsyncScope();
                 var clock = scope.ServiceProvider.GetRequiredService<IClock>();
-                var tx = scope.ServiceProvider.GetRequiredService<IIdempotentExecutor>();
-                var evaluate = scope.ServiceProvider.GetRequiredService<EvaluateDueMaintenanceHandler>();
+                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-                await tx.ExecuteAsync(
-                    "system/daily",
-                    clock.Today.ToString("yyyy-MM-dd"),
-                    "daily-v1",
-                    [],
-                    async ct => JsonSerializer.Serialize(await evaluate.HandleAsync(ct)),
-                    stoppingToken);
+                var command = new EvaluateDueMaintenanceCommand(
+                    new IdempotencyContext(
+                        "system/daily",
+                        clock.Today.ToString("yyyy-MM-dd"),
+                        "daily-v1",
+                        []));
+                await mediator.Send(command, stoppingToken);
 
                 var factory = scope.ServiceProvider.GetRequiredService<SqlConnectionFactory>();
                 await using var db = factory.Create();
@@ -39,8 +40,11 @@ public sealed class MaintenanceWorker(IServiceScopeFactory scopes, ILogger<Maint
 
                 foreach (var message in batch)
                 {
-                    // Entrega al menos una vez al log local.
-                    logger.LogInformation("Evento {EventId}: {Type} {Message}", message.Id, message.Type, message.Message);
+                    logger.LogInformation(
+                        "Evento {EventId}: {Type} {Message}",
+                        message.Id,
+                        message.Type,
+                        message.Message);
                     await db.ExecuteAsync(new CommandDefinition(
                         SqlQueryCatalog.Get(SqlQueryCatalog.Outbox.MarkPublished),
                         new { now = clock.UtcNow, message.Id },

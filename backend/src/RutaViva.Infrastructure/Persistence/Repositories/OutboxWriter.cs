@@ -1,17 +1,21 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
-using RutaViva.Application;
-using RutaViva.Domain;
+using RutaViva.Application.Interfaces.Events;
+using RutaViva.Domain.Events;
+using RutaViva.Infrastructure.Persistence.Transactions;
 
 namespace RutaViva.Infrastructure.Persistence.Repositories;
 
-public sealed class OutboxWriter(SqlUnitOfWork unitOfWork) : IOutboxWriter
+public sealed class OutboxWriter(SqlUnitOfWork unitOfWork) : SqlRepositoryBase(unitOfWork), IOutboxWriter
 {
-    public async Task AppendAsync(DomainEvent domainEvent, DateTimeOffset occurredAt, CancellationToken cancellationToken)
+    public async Task AppendAsync(
+        DomainEvent domainEvent,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
     {
         try
         {
-            await unitOfWork.Connection.ExecuteAsync(new CommandDefinition(
+            await UnitOfWork.Connection.ExecuteAsync(Command(
                 SqlQueryCatalog.Get(SqlQueryCatalog.Outbox.Insert),
                 new
                 {
@@ -23,8 +27,7 @@ public sealed class OutboxWriter(SqlUnitOfWork unitOfWork) : IOutboxWriter
                     OccurredAt = occurredAt,
                     PublishedAt = (DateTimeOffset?)null
                 },
-                unitOfWork.Transaction,
-                cancellationToken: cancellationToken));
+                cancellationToken));
         }
         catch (SqlException ex) when (ex.Number is 2601 or 2627
             && domainEvent.Type == DomainEventTypes.MaintenanceDueSoon)

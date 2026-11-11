@@ -1,4 +1,9 @@
 using RutaViva.Domain;
+using RutaViva.Domain.Aggregates.MaintenanceRoutines;
+using RutaViva.Domain.Aggregates.ServiceOrders;
+using RutaViva.Domain.Aggregates.Vehicles;
+using RutaViva.Domain.Events;
+using RutaViva.Domain.ValueObjects;
 using Xunit;
 
 namespace RutaViva.Tests;
@@ -22,7 +27,7 @@ public sealed class DomainTests
     public void Kilometre_boundaries(decimal odometer, MaintenanceStatus expected)
     {
         var r = Routine();
-        r.EvaluateDue(new Kilometrage(odometer), Today);
+        r.EvaluateDueStatus(new Kilometrage(odometer), Today);
         Assert.Equal(expected, r.Status);
     }
 
@@ -34,7 +39,7 @@ public sealed class DomainTests
     public void Time_boundaries(int elapsed, MaintenanceStatus expected)
     {
         var r = Routine();
-        r.EvaluateDue(new Kilometrage(20000), Today.AddDays(elapsed));
+        r.EvaluateDueStatus(new Kilometrage(20000), Today.AddDays(elapsed));
         Assert.Equal(expected, r.Status);
     }
 
@@ -42,11 +47,11 @@ public sealed class DomainTests
     public void Whichever_interval_occurs_first_wins()
     {
         var r = Routine();
-        r.EvaluateDue(new Kilometrage(20001), Today.AddDays(180));
+        r.EvaluateDueStatus(new Kilometrage(20001), Today.AddDays(180));
         Assert.Equal(MaintenanceStatus.Overdue, r.Status);
 
         var other = Routine();
-        other.EvaluateDue(new Kilometrage(30000), Today.AddDays(1));
+        other.EvaluateDueStatus(new Kilometrage(30000), Today.AddDays(1));
         Assert.Equal(MaintenanceStatus.Overdue, other.Status);
     }
 
@@ -54,21 +59,21 @@ public sealed class DomainTests
     public void Warning_only_once_per_cycle_and_enabled_after_reset()
     {
         var r = Routine();
-        r.EvaluateDue(new Kilometrage(29000), Today);
+        r.EvaluateDueStatus(new Kilometrage(29000), Today);
         Assert.Single(r.DomainEvents);
         Assert.Equal(DomainEventTypes.MaintenanceDueSoon, r.DomainEvents[0].Type);
         r.DequeueDomainEvents();
 
-        r.EvaluateDue(new Kilometrage(29500), Today);
+        r.EvaluateDueStatus(new Kilometrage(29500), Today);
         Assert.Empty(r.DomainEvents);
 
         var cycle = r.CycleId;
-        r.ResetCycle(new Kilometrage(30000), Today, Today);
+        r.ResetMaintenanceCycle(new Kilometrage(30000), Today, Today);
         Assert.NotEqual(cycle, r.CycleId);
         Assert.False(r.NoticeRaised);
         Assert.Equal(MaintenanceStatus.Current, r.Status);
 
-        r.EvaluateDue(new Kilometrage(39000), Today);
+        r.EvaluateDueStatus(new Kilometrage(39000), Today);
         Assert.Single(r.DomainEvents);
     }
 
@@ -76,7 +81,7 @@ public sealed class DomainTests
     public void Jump_directly_to_overdue_does_not_send_late_warning()
     {
         var r = Routine();
-        r.EvaluateDue(new Kilometrage(30000), Today);
+        r.EvaluateDueStatus(new Kilometrage(30000), Today);
         Assert.Empty(r.DomainEvents);
         Assert.Equal(MaintenanceStatus.Overdue, r.Status);
     }
@@ -87,7 +92,7 @@ public sealed class DomainTests
     public void Equal_or_old_readings_ignored(decimal reading)
     {
         var v = new Vehicle("abc123", "Taller", new Kilometrage(25000));
-        Assert.False(v.RegisterReading(new Kilometrage(reading)));
+        Assert.False(v.RegisterOdometerReading(new Kilometrage(reading)));
         Assert.Equal(25000, v.Odometer.Value);
         Assert.Equal(1, v.Version);
     }
@@ -96,7 +101,7 @@ public sealed class DomainTests
     public void Greater_reading_accepted()
     {
         var v = new Vehicle("abc123", "Taller", new Kilometrage(25000));
-        Assert.True(v.RegisterReading(new Kilometrage(25001)));
+        Assert.True(v.RegisterOdometerReading(new Kilometrage(25001)));
         Assert.Equal(25001, v.Odometer.Value);
     }
 
@@ -116,7 +121,7 @@ public sealed class DomainTests
     {
         var o = Order();
         o.Quote(new MoneyCop(2000000));
-        o.Approve();
+        o.ApproveQuote();
         o.StartService();
         o.CompleteService(new Kilometrage(50000), Today);
         Assert.Equal(OrderState.Completed, o.State);
@@ -166,7 +171,7 @@ public sealed class DomainTests
     {
         var o = Order();
         Assert.Throws<BusinessException>(o.StartService);
-        Assert.Throws<BusinessException>(o.Approve);
+        Assert.Throws<BusinessException>(o.ApproveQuote);
         o.Quote(new MoneyCop(100));
         Assert.Throws<BusinessException>(() => o.Quote(new MoneyCop(200)));
     }
@@ -201,9 +206,9 @@ public sealed class DomainTests
     public void Service_cannot_precede_previous_service_or_be_in_future()
     {
         var r = Routine();
-        Assert.Throws<BusinessException>(() => r.ResetCycle(new Kilometrage(19999), Today, Today));
-        Assert.Throws<BusinessException>(() => r.ResetCycle(new Kilometrage(20000), Today.AddDays(-1), Today));
-        Assert.Throws<BusinessException>(() => r.ResetCycle(new Kilometrage(20000), Today.AddDays(1), Today));
+        Assert.Throws<BusinessException>(() => r.ResetMaintenanceCycle(new Kilometrage(19999), Today, Today));
+        Assert.Throws<BusinessException>(() => r.ResetMaintenanceCycle(new Kilometrage(20000), Today.AddDays(-1), Today));
+        Assert.Throws<BusinessException>(() => r.ResetMaintenanceCycle(new Kilometrage(20000), Today.AddDays(1), Today));
     }
 
     [Fact]
@@ -211,7 +216,7 @@ public sealed class DomainTests
     {
         var r = Routine();
         r.SuppressCancelledCycle();
-        r.EvaluateDue(new Kilometrage(30000), Today.AddDays(200));
+        r.EvaluateDueStatus(new Kilometrage(30000), Today.AddDays(200));
         Assert.Empty(r.DomainEvents);
         Assert.True(r.CycleCancelled);
     }
@@ -220,11 +225,11 @@ public sealed class DomainTests
     public void Single_dimension_routines_supported()
     {
         var km = Routine(10000, null);
-        km.EvaluateDue(new Kilometrage(20000), Today.AddDays(1000));
+        km.EvaluateDueStatus(new Kilometrage(20000), Today.AddDays(1000));
         Assert.Equal(MaintenanceStatus.Current, km.Status);
 
         var time = Routine(null, 180);
-        time.EvaluateDue(new Kilometrage(100000), Today);
+        time.EvaluateDueStatus(new Kilometrage(100000), Today);
         Assert.Equal(MaintenanceStatus.Current, time.Status);
     }
 

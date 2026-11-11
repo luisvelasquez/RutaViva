@@ -1,4 +1,4 @@
-namespace RutaViva.Domain;
+namespace RutaViva.Domain.ValueObjects;
 
 /// <summary>Dinero en COP. Importe positivo con hasta dos decimales.</summary>
 public readonly record struct MoneyCop

@@ -1,34 +1,33 @@
 using Dapper;
-using RutaViva.Application;
+using RutaViva.Application.Interfaces.Persistence;
 using RutaViva.Domain;
+using RutaViva.Domain.Aggregates.Vehicles;
 using RutaViva.Infrastructure.Persistence.Rows;
+using RutaViva.Infrastructure.Persistence.Transactions;
 
 namespace RutaViva.Infrastructure.Persistence.Repositories;
 
-public sealed class VehicleRepository(SqlUnitOfWork unitOfWork) : IVehicleRepository
+public sealed class VehicleRepository(SqlUnitOfWork unitOfWork)
+    : SqlRepositoryBase(unitOfWork), IVehicleRepository
 {
-    private CommandDefinition Cmd(string sql, object? args, CancellationToken ct) =>
-        new(sql, args, unitOfWork.Transaction, cancellationToken: ct);
-
-    public async Task<Vehicle> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<Vehicle> FindVehicleByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var row = await unitOfWork.Connection.QuerySingleOrDefaultAsync<VehicleRow>(
-            Cmd(SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.GetById), new { id }, cancellationToken));
+        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<VehicleRow>(
+            Command(SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.GetById), new { id }, cancellationToken));
         if (row is null)
             throw new MissingException("Vehículo no encontrado.");
         return Vehicle.Reconstitute(row.Id, row.Version, row.Plate, row.Workshop, row.Odometer);
     }
 
-    public async Task<IReadOnlyList<Guid>> ListIdsAsync(int skip, int take, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<Guid>> ListVehicleIdsAsync(int skip, int take, CancellationToken cancellationToken)
     {
-        var ids = await unitOfWork.Connection.QueryAsync<Guid>(
-            Cmd(SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.ListIds), new { skip, take }, cancellationToken));
+        var ids = await UnitOfWork.Connection.QueryAsync<Guid>(
+            Command(SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.ListIds), new { skip, take }, cancellationToken));
         return ids.ToList();
     }
 
-    public async Task InsertAsync(Vehicle vehicle, CancellationToken cancellationToken)
-    {
-        await unitOfWork.Connection.ExecuteAsync(Cmd(
+    public Task InsertVehicleAsync(Vehicle vehicle, CancellationToken cancellationToken) =>
+        UnitOfWork.Connection.ExecuteAsync(Command(
             SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.Insert),
             new
             {
@@ -39,11 +38,10 @@ public sealed class VehicleRepository(SqlUnitOfWork unitOfWork) : IVehicleReposi
                 Odometer = vehicle.Odometer.Value
             },
             cancellationToken));
-    }
 
-    public async Task UpdateAsync(Vehicle vehicle, long expectedVersion, CancellationToken cancellationToken)
+    public async Task SaveVehicleAsync(Vehicle vehicle, long expectedVersion, CancellationToken cancellationToken)
     {
-        var affected = await unitOfWork.Connection.ExecuteAsync(Cmd(
+        var affected = await UnitOfWork.Connection.ExecuteAsync(Command(
             SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.Update),
             new
             {

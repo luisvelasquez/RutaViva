@@ -1,4 +1,4 @@
-namespace RutaViva.Domain;
+namespace RutaViva.Domain.ValueObjects;
 
 /// <summary>Kilometraje no negativo con hasta dos decimales. Comparación por valor.</summary>
 public readonly record struct Kilometrage : IComparable<Kilometrage>
@@ -15,6 +15,7 @@ public readonly record struct Kilometrage : IComparable<Kilometrage>
     public int CompareTo(Kilometrage other) => Value.CompareTo(other.Value);
     public bool IsGreaterThan(Kilometrage other) => Value > other.Value;
     public bool IsLessOrEqual(Kilometrage other) => Value <= other.Value;
+
     public Kilometrage DistanceFrom(Kilometrage baseline)
     {
         if (Value < baseline.Value)

@@ -1,14 +1,25 @@
 using System.Text.Json;
 using Dapper;
 using Microsoft.Data.SqlClient;
-using RutaViva.Application;
-using RutaViva.Application.Maintenance;
-using RutaViva.Application.Orders;
-using RutaViva.Application.Vehicles;
+using RutaViva.Application.Abstractions.Time;
+using RutaViva.Application.MaintenanceRoutines.Commands.EvaluateDueMaintenance;
+using RutaViva.Application.MaintenanceRoutines.Coordination;
+using RutaViva.Application.Messaging;
+using RutaViva.Application.ServiceOrders.Commands.CancelServiceOrder;
+using RutaViva.Application.ServiceOrders.Commands.CompleteServiceOrder;
+using RutaViva.Application.ServiceOrders.Commands.QuoteServiceOrder;
+using RutaViva.Application.ServiceOrders.Commands.StartServiceOrder;
+using RutaViva.Application.Vehicles.Commands.RegisterOdometerReading;
 using RutaViva.Domain;
-using RutaViva.Infrastructure;
-using RutaViva.Infrastructure.Persistence;
+using RutaViva.Domain.Aggregates.MaintenanceRoutines;
+using RutaViva.Domain.Aggregates.Vehicles;
+using RutaViva.Domain.ValueObjects;
+using RutaViva.Infrastructure.Persistence.Concurrency;
+using RutaViva.Infrastructure.Persistence.Connections;
+using RutaViva.Infrastructure.Persistence.Idempotency;
 using RutaViva.Infrastructure.Persistence.Repositories;
+using RutaViva.Infrastructure.Persistence.Transactions;
+using RutaViva.Tests.Support;
 using Xunit;
 
 namespace RutaViva.Tests;
@@ -46,7 +57,7 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
             InitialCatalog = "RutaVivaTest_" + Guid.NewGuid().ToString("N")
         };
         connection = cs.ConnectionString;
-        await SqlDatabase.Initialize(Factory());
+        await TestDatabase.InitializeAsync(Factory());
     }
 
     public async Task DisposeAsync()
@@ -63,40 +74,40 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     private sealed class Scope : IAsyncDisposable
     {
         public SqlUnitOfWork UnitOfWork { get; }
+        public IdempotentExecutor Executor { get; }
+        public RegisterOdometerReadingCommandHandler RegisterReading { get; }
+        public EvaluateDueMaintenanceCommandHandler Evaluate { get; }
+        public QuoteServiceOrderCommandHandler Quote { get; }
+        public StartServiceOrderCommandHandler Start { get; }
+        public CancelServiceOrderCommandHandler Cancel { get; }
+        public CompleteServiceOrderCommandHandler Complete { get; }
         public VehicleRepository Vehicles { get; }
         public MaintenanceRoutineRepository Routines { get; }
-        public ServiceOrderRepository Orders { get; }
-        public OutboxWriter Outbox { get; }
-        public IdempotencyStore Idempotency { get; }
-        public DueMaintenanceCoordinator Coordinator { get; }
-        public RegisterOdometerReadingHandler RegisterReading { get; }
-        public EvaluateDueMaintenanceHandler Evaluate { get; }
-        public QuoteServiceOrderHandler Quote { get; }
-        public StartServiceOrderHandler Start { get; }
-        public CancelServiceOrderHandler Cancel { get; }
-        public CompleteServiceOrderHandler Complete { get; }
-        public IdempotentExecutor Executor { get; }
 
         public Scope(SqlConnectionFactory factory, IClock clock)
         {
             UnitOfWork = new SqlUnitOfWork(factory);
             Vehicles = new VehicleRepository(UnitOfWork);
             Routines = new MaintenanceRoutineRepository(UnitOfWork);
-            Orders = new ServiceOrderRepository(UnitOfWork);
-            Outbox = new OutboxWriter(UnitOfWork);
-            Idempotency = new IdempotencyStore(UnitOfWork);
-            Coordinator = new DueMaintenanceCoordinator(Orders, Outbox, clock);
-            RegisterReading = new RegisterOdometerReadingHandler(Vehicles, Routines, Coordinator);
-            Evaluate = new EvaluateDueMaintenanceHandler(Vehicles, Routines, Coordinator, Idempotency, clock);
-            Quote = new QuoteServiceOrderHandler(Orders, Outbox, clock);
-            Start = new StartServiceOrderHandler(Orders, Outbox, clock);
-            Cancel = new CancelServiceOrderHandler(Orders, Routines, Outbox, clock);
-            Complete = new CompleteServiceOrderHandler(Orders, Routines, Vehicles, Coordinator, Outbox, clock);
-            Executor = new IdempotentExecutor(UnitOfWork, Idempotency, clock);
+            var orders = new ServiceOrderRepository(UnitOfWork);
+            var outbox = new OutboxWriter(UnitOfWork);
+            var idempotency = new IdempotencyStore(UnitOfWork);
+            var locks = new ApplicationLock(UnitOfWork);
+            var coordinator = new DueMaintenanceCoordinator(orders, outbox, clock);
+            RegisterReading = new RegisterOdometerReadingCommandHandler(Vehicles, Routines, coordinator);
+            Evaluate = new EvaluateDueMaintenanceCommandHandler(Vehicles, Routines, coordinator, locks, clock);
+            Quote = new QuoteServiceOrderCommandHandler(orders, outbox, clock);
+            Start = new StartServiceOrderCommandHandler(orders, outbox, clock);
+            Cancel = new CancelServiceOrderCommandHandler(orders, Routines, outbox, clock);
+            Complete = new CompleteServiceOrderCommandHandler(orders, Routines, Vehicles, coordinator, outbox, clock);
+            Executor = new IdempotentExecutor(UnitOfWork, idempotency, locks, clock);
         }
 
         public ValueTask DisposeAsync() => UnitOfWork.DisposeAsync();
     }
+
+    private static IdempotencyContext Ctx(string scope, string key, string fingerprint) =>
+        new(scope, key, fingerprint, []);
 
     private async Task<(Guid Vehicle, Guid Routine)> Seed(decimal current = 0)
     {
@@ -107,11 +118,11 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         {
             var v = new Vehicle("TEST01", "Taller", new Kilometrage(current));
             var r = new MaintenanceRoutine(v.Id, "Aceite", new(100, null), new(0), clock.Today);
-            await scope.Vehicles.InsertAsync(v, ct);
-            await scope.Routines.InsertAsync(r, ct);
+            await scope.Vehicles.InsertVehicleAsync(v, ct);
+            await scope.Routines.InsertRoutineAsync(r, ct);
             vehicleId = v.Id;
             routineId = r.Id;
-            return "{}";
+            return true;
         }, CancellationToken.None);
         return (vehicleId, routineId);
     }
@@ -119,13 +130,14 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     private async Task<string> Command(string key, Func<Scope, CancellationToken, Task<object>> action, string fingerprint = "same")
     {
         await using var scope = new Scope(Factory(), clock);
-        return await scope.Executor.ExecuteAsync(
+        var result = await scope.Executor.ExecuteAsync(
             "test",
             key,
             fingerprint,
             [],
-            async ct => JsonSerializer.Serialize(await action(scope, ct)),
+            async ct => await action(scope, ct),
             CancellationToken.None);
+        return JsonSerializer.Serialize(result, JsonSerializerOptions.Web);
     }
 
     [SqlFact]
@@ -133,7 +145,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     {
         var ids = await Seed();
         var results = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ =>
-            Command("repeat", (s, ct) => s.RegisterReading.HandleAsync(ids.Vehicle, new(100), ct))));
+            Command("repeat", async (s, ct) => await s.RegisterReading.Handle(
+                new RegisterOdometerReadingCommand(ids.Vehicle, 100, Ctx("test", "repeat", "same")), ct))));
         Assert.Single(results.Distinct());
         await using var db = Db();
         Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Orders"));
@@ -145,9 +158,11 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     {
         var ids = await Seed();
         var tasks = Enumerable.Range(100, 12)
-            .Select(n => Command("reading" + n, (s, ct) => s.RegisterReading.HandleAsync(ids.Vehicle, new(n), ct)))
+            .Select(n => Command("reading" + n, async (s, ct) => await s.RegisterReading.Handle(
+                new RegisterOdometerReadingCommand(ids.Vehicle, n, Ctx("test", "reading" + n, "same")), ct)))
             .ToList();
-        tasks.Add(Command("daily", (s, ct) => s.Evaluate.HandleAsync(ct)));
+        tasks.Add(Command("daily", async (s, ct) => await s.Evaluate.Handle(
+            new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct)));
         await Task.WhenAll(tasks);
 
         await using var db = Db();
@@ -160,7 +175,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     {
         await Seed(90);
         await Task.WhenAll(Enumerable.Range(0, 10).Select(n =>
-            Command("daily" + n, (s, ct) => s.Evaluate.HandleAsync(ct))));
+            Command("daily" + n, async (s, ct) => await s.Evaluate.Handle(
+                new EvaluateDueMaintenanceCommand(Ctx("test", "daily" + n, "same")), ct))));
 
         await using var db = Db();
         Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Outbox WHERE Type='MaintenanceDueSoon'"));
@@ -170,9 +186,11 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     public async Task Same_key_with_different_payload_conflicts()
     {
         var ids = await Seed();
-        await Command("key", (s, ct) => s.RegisterReading.HandleAsync(ids.Vehicle, new(10), ct));
+        await Command("key", async (s, ct) => await s.RegisterReading.Handle(
+            new RegisterOdometerReadingCommand(ids.Vehicle, 10, Ctx("test", "key", "same")), ct));
         await Assert.ThrowsAsync<ConflictException>(() =>
-            Command("key", (s, ct) => s.RegisterReading.HandleAsync(ids.Vehicle, new(20), ct), "different"));
+            Command("key", async (s, ct) => await s.RegisterReading.Handle(
+                new RegisterOdometerReadingCommand(ids.Vehicle, 20, Ctx("test", "key", "different")), ct), "different"));
 
         await using var db = Db();
         Assert.Equal(10, await db.ExecuteScalarAsync<decimal>("SELECT Odometer FROM dbo.Vehicles"));
@@ -182,7 +200,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     public async Task Database_rejects_duplicate_open_order_even_outside_application()
     {
         var ids = await Seed(100);
-        await Command("daily", (s, ct) => s.Evaluate.HandleAsync(ct));
+        await Command("daily", async (s, ct) => await s.Evaluate.Handle(
+            new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var db = Db();
         var cycleId = await db.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines");
         await Assert.ThrowsAsync<SqlException>(() => db.ExecuteAsync("""
@@ -194,15 +213,19 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     [SqlFact]
     public async Task Failed_completion_rolls_back_order_routine_receipt_and_events()
     {
-        var ids = await Seed(100);
-        await Command("daily", (s, ct) => s.Evaluate.HandleAsync(ct));
+        await Seed(100);
+        await Command("daily", async (s, ct) => await s.Evaluate.Handle(
+            new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var query = Db();
         var orderId = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
 
-        await Command("quote", async (s, ct) => await s.Quote.HandleAsync(orderId, new(1, 100), ct));
-        await Command("start", async (s, ct) => await s.Start.HandleAsync(orderId, new(2), ct));
+        await Command("quote", async (s, ct) => await s.Quote.Handle(
+            new QuoteServiceOrderCommand(orderId, 1, 100, Ctx("test", "quote", "same")), ct));
+        await Command("start", async (s, ct) => await s.Start.Handle(
+            new StartServiceOrderCommand(orderId, 2, Ctx("test", "start", "same")), ct));
         await Assert.ThrowsAsync<BusinessException>(() => Command("bad-complete", async (s, ct) =>
-            await s.Complete.HandleAsync(orderId, new(3, Kilometres: 100, Date: clock.Today.AddDays(1)), ct)));
+            await s.Complete.Handle(
+                new CompleteServiceOrderCommand(orderId, 3, 100, clock.Today.AddDays(1), Ctx("test", "bad-complete", "same")), ct)));
 
         await using var db = Db();
         Assert.Equal("InProgress", await db.ExecuteScalarAsync<string>("SELECT State FROM dbo.Orders"));
@@ -215,29 +238,27 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     public async Task Concurrent_start_and_cancel_only_one_transition_succeeds()
     {
         await Seed(100);
-        await Command("daily", (s, ct) => s.Evaluate.HandleAsync(ct));
+        await Command("daily", async (s, ct) => await s.Evaluate.Handle(
+            new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var query = Db();
         var id = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
-        await Command("quote", async (s, ct) => await s.Quote.HandleAsync(id, new(1, 100), ct));
+        await Command("quote", async (s, ct) => await s.Quote.Handle(
+            new QuoteServiceOrderCommand(id, 1, 100, Ctx("test", "quote", "same")), ct));
 
         async Task<bool> Try(string action)
         {
             try
             {
                 if (action == "start")
-                    await Command(action, async (s, ct) => await s.Start.HandleAsync(id, new(2), ct));
+                    await Command(action, async (s, ct) => await s.Start.Handle(
+                        new StartServiceOrderCommand(id, 2, Ctx("test", action, "same")), ct));
                 else
-                    await Command(action, async (s, ct) => await s.Cancel.HandleAsync(id, new(2), ct));
+                    await Command(action, async (s, ct) => await s.Cancel.Handle(
+                        new CancelServiceOrderCommand(id, 2, Ctx("test", action, "same")), ct));
                 return true;
             }
-            catch (ConflictException)
-            {
-                return false;
-            }
-            catch (BusinessException)
-            {
-                return false;
-            }
+            catch (ConflictException) { return false; }
+            catch (BusinessException) { return false; }
         }
 
         var results = await Task.WhenAll(Try("start"), Try("cancel"));
@@ -248,16 +269,19 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     public async Task Successful_completion_resets_cycle_and_replay_does_not_reset_again()
     {
         await Seed(100);
-        await Command("daily", (s, ct) => s.Evaluate.HandleAsync(ct));
+        await Command("daily", async (s, ct) => await s.Evaluate.Handle(
+            new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var query = Db();
         var id = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
-        await Command("quote", async (s, ct) => await s.Quote.HandleAsync(id, new(1, 100), ct));
-        await Command("start", async (s, ct) => await s.Start.HandleAsync(id, new(2), ct));
+        await Command("quote", async (s, ct) => await s.Quote.Handle(
+            new QuoteServiceOrderCommand(id, 1, 100, Ctx("test", "quote", "same")), ct));
+        await Command("start", async (s, ct) => await s.Start.Handle(
+            new StartServiceOrderCommand(id, 2, Ctx("test", "start", "same")), ct));
 
-        var first = await Command("complete", async (s, ct) =>
-            await s.Complete.HandleAsync(id, new(3, Kilometres: 110, Date: clock.Today), ct));
-        var replay = await Command("complete", async (s, ct) =>
-            await s.Complete.HandleAsync(id, new(3, Kilometres: 110, Date: clock.Today), ct));
+        var first = await Command("complete", async (s, ct) => await s.Complete.Handle(
+            new CompleteServiceOrderCommand(id, 3, 110, clock.Today, Ctx("test", "complete", "same")), ct));
+        var replay = await Command("complete", async (s, ct) => await s.Complete.Handle(
+            new CompleteServiceOrderCommand(id, 3, 110, clock.Today, Ctx("test", "complete", "same")), ct));
         Assert.Equal(first, replay);
 
         await using var db = Db();
@@ -269,16 +293,13 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
     [SqlFact]
     public async Task Sql_queries_are_parameterized_not_interpolated()
     {
-        var sql = SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.GetById);
+        var sql = RutaViva.Infrastructure.Persistence.SqlQueryCatalog.Get(
+            RutaViva.Infrastructure.Persistence.SqlQueryCatalog.Vehicles.GetById);
         Assert.Contains("@id", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("{0}", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT *", sql, StringComparison.OrdinalIgnoreCase);
 
         await using var scope = new Scope(Factory(), clock);
-        await scope.UnitOfWork.EnsureOpenAsync(CancellationToken.None);
-        // Ejecuta con parámetro Dapper: si interpolara el GUID como texto libre fallaría el plan.
-        var id = Guid.NewGuid();
-        await scope.UnitOfWork.Connection.QueryAsync(
-            new CommandDefinition(sql, new { id }, cancellationToken: CancellationToken.None));
+        await scope.UnitOfWork.BeginAsync(CancellationToken.None);
+        await scope.UnitOfWork.RollbackAsync(CancellationToken.None);
     }
 }

@@ -1,4 +1,4 @@
-namespace RutaViva.Domain;
+namespace RutaViva.Domain.Events;
 
 public sealed record DomainEvent(string Type, Guid AggregateId, Guid CycleId, string Message);
 

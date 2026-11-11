@@ -1,77 +1,40 @@
 # Decisiones de arquitectura
 
-## Organización y dependencias
+## Referencias adaptadas
 
-Frontend Angular y API ASP.NET Core son aplicaciones independientes. El backend tiene un único despliegue y SQL Server. Capas:
+De `C:\repo\businessname-down-payment` (solo lectura):
 
-- **Domain**: agregados, VOs, invariantes, eventos.
-- **Application**: casos de uso por funcionalidad (`Vehicles`, `Routines`, `Maintenance`, `Orders`) y contratos.
-- **Infrastructure**: Dapper, consultas `.sql`, repositorios por agregado, UoW, idempotencia, outbox.
-- **Api**: HTTP, Problem Details, worker diario/publicador, composición DI.
+| Archivo de referencia | Qué se adaptó |
+| --- | --- |
+| `...Manager.Api/Controllers/DownPaymentController.cs` | Controladores delgados + `IMediator` |
+| `...Application/DependencyContainer.cs` | MediatR registrado en Application |
+| `...Manager.Api/Extensions/SwaggerExtension.cs` + `WebApplicationExtension.cs` | OpenAPI + Swagger UI en `/swagger` |
+| `...Manager.Api/Properties/launchSettings.json` | Perfil local con `launchUrl: swagger` |
+| `...Infrastructure/Repositories/Base/SqlServer/SqlServerBase.cs` | Idea de base SQL compartida → `SqlRepositoryBase` (sin Polly/credenciales de empresa) |
 
-Domain no depende de Dapper, SQL ni HTTP. No hay microservicios: completar una orden, reiniciar la rutina, outbox y recibo deben ser atómicos.
+`vehicle-management` no estaba disponible en este entorno.
 
-## Agregados y glosario
+## Capas
 
-| Negocio | Código | Comportamiento |
-| --- | --- | --- |
-| Vehículo | `Vehicle` | `RegisterReading` |
-| Rutina | `MaintenanceRoutine` | `EvaluateDue`, `ResetCycle`, `SuppressCancelledCycle` |
-| Orden | `ServiceOrder` | `Quote`, `Approve`, `RejectQuote`, `Cancel`, `StartService`, `CompleteService` |
-| Kilometraje | `Kilometrage` | VO usado como `Odometer` / bases de ciclo |
-| Dinero COP | `MoneyCop` | VO + techo de autoaprobación |
-| Intervalo | `MaintenanceInterval` | km, días o ambos |
+- **Api**: Controllers, Contracts HTTP, Configuration, DI, worker.
+- **Application**: Commands/Queries por funcionalidad, MediatR, contratos de persistencia/idempotencia.
+- **Domain**: Aggregates + ValueObjects + Events.
+- **Infrastructure**: Connections, Transactions, Repositories, Queries `.sql`, Idempotency, Concurrency.
 
-Reconstitución: `Reconstitute(...)` sin eventos de creación ni setters públicos de negocio. Persistencia usa filas (`VehicleRow`, …) y mapeo explícito.
+## CQRS visible
 
-## Persistencia (sin mini-ORM)
+- Escrituras: `IIdempotentCommand<T>` + handler + `IdempotentCommandBehavior`.
+- Lecturas: `IQuery<T>` sin idempotencia.
+- Un solo mediador: **MediatR** (alineado al proyecto de referencia).
 
-Se eliminó el antiguo `SqlSession` con diccionarios de agregados y guardado automático.
+## Persistencia
 
-- `SqlUnitOfWork` administra conexión/transacción/commit/rollback.
-- Cada repositorio ejecuta SQL explícito leído por `SqlQueryCatalog` desde archivos embebidos.
-- Optimistic concurrency: `UPDATE … WHERE Id=@Id AND Version=@ExpectedVersion`.
-- Unicidad de orden abierta: índice filtrado `UX_Orders_OpenRoutine`.
-- Un aviso por ciclo: índice filtrado `UX_Outbox_NoticeCycle`.
+- Escrituras: `SqlUnitOfWork` comparte conexión/transacción entre repos del mismo scope.
+- Lecturas: `MaintenanceDashboardReadStore` abre y libera su propia conexión.
+- La API no inicializa esquema ni seed; scripts en `backend/database/00_*.sql` … `02_*.sql`.
+- Pruebas de integración preparan la base con `TestDatabase` + `01_schema.sql`.
 
 ## Idempotencia vs concurrencia
 
-**Idempotencia HTTP:** header `Idempotency-Key`, ámbito = ruta, huella SHA-256 del body. Recibo en la misma transacción. Éxitos únicamente; fallos no se marcan como exitosos.
-
-**Concurrencia:** distinta de idempotencia. Locks de aplicación:
-
-1. `idem:{hash(scope|key)}`
-2. Recursos de negocio ordenados (`vehicle:{guid}`, `order:{guid}`)
-
-La revisión diaria pagina vehículos (50) y adquiere lock por vehículo dentro de la transacción del comando diario. No se usa un lock global de toda la flota ni `SemaphoreSlim` como garantía.
-
-## Eventos
-
-Los agregados acumulan `DomainEvent` y los casos de uso los vuelcan al Outbox. El worker publica al log y marca `PublishedAt`. Entrega **al menos una vez**; la generación única del aviso es una garantía distinta (dominio + índice).
-
-## Tiempo
-
-`IClock` con `Today` en zona Bogotá (`America/Bogota` / `SA Pacific Standard Time` en Windows). Intervalos de tiempo en **días** (6 meses ≈ 180).
-
-## Frontend
-
-Organizado por features (`fleet`, `orders`, `events`), modelos y servicio HTTP separados, formularios reactivos, locale `es-CO`, conservación de clave de idempotencia ante resultado incierto.
-
-## Versiones
-
-| Componente | Versión |
-| --- | --- |
-| .NET / ASP.NET Core | 10 |
-| Dapper | 2.1.66 |
-| Microsoft.Data.SqlClient | 6.1.3 |
-| Angular | 20.3.x |
-| Node (Docker build) | 24 |
-| SQL Server | 2022 (imagen oficial) |
-| nginx | 1.28-alpine |
-
-## Fuentes
-
-- https://github.com/DapperLib/Dapper
-- https://learn.microsoft.com/sql/relational-databases/system-stored-procedures/sp-getapplock-transact-sql
-- https://learn.microsoft.com/sql/linux/quickstart-install-connect-docker
-- https://angular.dev/reference/versions
+- Idempotencia: recibo + huella dentro de la transacción (`IIdempotentExecutor`).
+- Concurrencia: `IApplicationLock` (sp_getapplock), `Version`, índices únicos filtrados.

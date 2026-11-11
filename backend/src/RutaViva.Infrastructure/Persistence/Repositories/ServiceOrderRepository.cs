@@ -1,39 +1,42 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
-using RutaViva.Application;
+using RutaViva.Application.Interfaces.Persistence;
 using RutaViva.Domain;
+using RutaViva.Domain.Aggregates.ServiceOrders;
 using RutaViva.Infrastructure.Persistence.Rows;
+using RutaViva.Infrastructure.Persistence.Transactions;
 
 namespace RutaViva.Infrastructure.Persistence.Repositories;
 
-public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork) : IServiceOrderRepository
+public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork)
+    : SqlRepositoryBase(unitOfWork), IServiceOrderRepository
 {
-    private CommandDefinition Cmd(string sql, object? args, CancellationToken ct) =>
-        new(sql, args, unitOfWork.Transaction, cancellationToken: ct);
-
-    public async Task<ServiceOrder> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<ServiceOrder> FindServiceOrderByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var row = await unitOfWork.Connection.QuerySingleOrDefaultAsync<OrderRow>(
-            Cmd(SqlQueryCatalog.Get(SqlQueryCatalog.ServiceOrders.GetById), new { id }, cancellationToken));
+        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<OrderRow>(
+            Command(SqlQueryCatalog.Get(SqlQueryCatalog.ServiceOrders.GetById), new { id }, cancellationToken));
         if (row is null)
             throw new MissingException("Orden no encontrada.");
         return Map(row);
     }
 
-    public async Task<bool> HasOpenAsync(Guid vehicleId, Guid routineId, CancellationToken cancellationToken)
+    public async Task<bool> HasOpenOrderForRoutineAsync(
+        Guid vehicleId,
+        Guid routineId,
+        CancellationToken cancellationToken)
     {
-        var count = await unitOfWork.Connection.ExecuteScalarAsync<int>(Cmd(
+        var count = await UnitOfWork.Connection.ExecuteScalarAsync<int>(Command(
             SqlQueryCatalog.Get(SqlQueryCatalog.ServiceOrders.FindOpen),
             new { vehicleId, routineId },
             cancellationToken));
         return count > 0;
     }
 
-    public async Task InsertAsync(ServiceOrder order, CancellationToken cancellationToken)
+    public async Task InsertServiceOrderAsync(ServiceOrder order, CancellationToken cancellationToken)
     {
         try
         {
-            await unitOfWork.Connection.ExecuteAsync(Cmd(
+            await UnitOfWork.Connection.ExecuteAsync(Command(
                 SqlQueryCatalog.Get(SqlQueryCatalog.ServiceOrders.Insert),
                 Params(order, null),
                 cancellationToken));
@@ -44,9 +47,12 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork) : IServiceO
         }
     }
 
-    public async Task UpdateAsync(ServiceOrder order, long expectedVersion, CancellationToken cancellationToken)
+    public async Task SaveServiceOrderAsync(
+        ServiceOrder order,
+        long expectedVersion,
+        CancellationToken cancellationToken)
     {
-        var affected = await unitOfWork.Connection.ExecuteAsync(Cmd(
+        var affected = await UnitOfWork.Connection.ExecuteAsync(Command(
             SqlQueryCatalog.Get(SqlQueryCatalog.ServiceOrders.Update),
             Params(order, expectedVersion),
             cancellationToken));
@@ -72,15 +78,6 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork) : IServiceO
 
     private static ServiceOrder Map(OrderRow row) =>
         ServiceOrder.Reconstitute(
-            row.Id,
-            row.Version,
-            row.VehicleId,
-            row.RoutineId,
-            row.CycleId,
-            row.Workshop,
-            Enum.Parse<OrderState>(row.State),
-            row.QuoteAmount,
-            row.ActualKm,
-            row.ActualDate,
-            row.CreatedAt);
+            row.Id, row.Version, row.VehicleId, row.RoutineId, row.CycleId, row.Workshop,
+            Enum.Parse<OrderState>(row.State), row.QuoteAmount, row.ActualKm, row.ActualDate, row.CreatedAt);
 }
