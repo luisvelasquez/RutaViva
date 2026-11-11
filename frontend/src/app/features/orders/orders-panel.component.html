@@ -1,0 +1,88 @@
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Órdenes de servicio</h2>
+      <p>Las cotizaciones de hasta $1.500.000 COP se aprueban automáticamente.</p>
+    </div>
+    <span class="badge" data-state="Current">{{ data.orders.length }} órdenes</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Vehículo / rutina</th>
+          <th>Taller</th>
+          <th>Estado</th>
+          <th>Cotización</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (o of data.orders; track o.id) {
+          <tr>
+            <td>
+              <strong>{{ plate(o.vehicleId) }}</strong>
+              <small>{{ routineName(o.routineId) }}</small>
+              <small>#{{ o.id.slice(0, 8) }} · v{{ o.version }}</small>
+            </td>
+            <td>{{ o.workshop }}</td>
+            <td><app-status-badge [state]="o.state" /></td>
+            <td>{{ o.quoteAmount === null ? 'Sin cotización' : (o.quoteAmount | currency:'COP':'symbol-narrow':'1.0-0') }}</td>
+            <td>
+              <div class="actions">
+                @if (o.state === 'Created') {
+                  <button type="button" class="primary small" (click)="openAction(o, 'quote')">Cotizar</button>
+                }
+                @if (o.state === 'Quoted') {
+                  <button type="button" class="primary small" (click)="openAction(o, 'approve')">Aprobar</button>
+                  <button type="button" class="danger small" (click)="openAction(o, 'reject')">Rechazar</button>
+                }
+                @if (o.state === 'Approved') {
+                  <button type="button" class="primary small" (click)="openAction(o, 'start')">Iniciar</button>
+                }
+                @if (o.state === 'InProgress') {
+                  <button type="button" class="primary small" (click)="openAction(o, 'complete')">Completar</button>
+                }
+                @if (['Created', 'Quoted', 'Approved'].includes(o.state)) {
+                  <button type="button" class="secondary small" (click)="openAction(o, 'cancel')">Cancelar</button>
+                }
+                @if (o.state === 'Completed') {
+                  <span class="muted">{{ o.actualDate }} · {{ o.actualKm | number }} km</span>
+                }
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="5" class="empty">Las órdenes aparecerán cuando venza una rutina.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+@if (activeOrder; as o) {
+  <div class="modal-backdrop">
+    <section class="modal" role="dialog" aria-modal="true">
+      <button type="button" class="close" aria-label="Cerrar" [disabled]="busy" (click)="activeOrder = null">×</button>
+      <h2>{{ actionLabel() }}</h2>
+      <p>{{ plate(o.vehicleId) }} · {{ routineName(o.routineId) }}</p>
+      <form [formGroup]="actionForm" (ngSubmit)="submitAction()">
+        @if (action === 'quote') {
+          <label>Valor de cotización (COP)<input type="number" min="0.01" step="0.01" formControlName="amount" /></label>
+          <p class="hint">Mayor a $1.500.000: requiere aprobación del cliente.</p>
+        }
+        @if (action === 'complete') {
+          <label>Kilometraje real del servicio<input type="number" min="0" step="0.01" formControlName="kilometres" /></label>
+          <label>Fecha real del servicio<input type="date" [attr.max]="data.today" formControlName="date" /></label>
+          <p class="hint">La rutina inicia un nuevo ciclo desde estos valores.</p>
+        }
+        @if (action === 'cancel' || action === 'reject') {
+          <p class="alert error">La orden quedará cancelada y este ciclo no generará una nueva orden.</p>
+        }
+        <button class="primary full" [disabled]="busy || ((action === 'quote' || action === 'complete') && actionForm.invalid)">
+          {{ busy ? 'Procesando…' : actionLabel() }}
+        </button>
+      </form>
+    </section>
+  </div>
+}

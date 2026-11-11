@@ -1,0 +1,26 @@
+INSERT INTO dbo.Routines (
+    Id,
+    Version,
+    VehicleId,
+    Name,
+    IntervalKm,
+    IntervalDays,
+    LastServiceKm,
+    LastServiceDate,
+    CycleId,
+    NoticeRaised,
+    CycleCancelled,
+    Status)
+VALUES (
+    @Id,
+    @Version,
+    @VehicleId,
+    @Name,
+    @IntervalKm,
+    @IntervalDays,
+    @LastServiceKm,
+    @LastServiceDate,
+    @CycleId,
+    @NoticeRaised,
+    @CycleCancelled,
+    @Status);

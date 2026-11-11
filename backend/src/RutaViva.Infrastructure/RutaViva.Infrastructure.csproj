@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../RutaViva.Domain/RutaViva.Domain.csproj" />
+    <ProjectReference Include="../RutaViva.Application/RutaViva.Application.csproj" />
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.3" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+    <EmbeddedResource Include="../../database/*.sql" Link="Sql/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Persistence/Queries/**/*.sql" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,87 @@
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Inicio RutaViva">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19 19 5M5 5h14v14"/></svg>
+      </span>
+      RutaViva<span class="brand-dot">.</span>
+    </a>
+    <div class="workspace">
+      <span class="avatar">RV</span>
+      <div>Operación de flota<small>Centro de mantenimiento</small></div>
+    </div>
+    <span class="nav-caption">ESPACIO DE TRABAJO</span>
+    <nav aria-label="Principal">
+      <button type="button" [class.active]="tab() === 'fleet'" (click)="tab.set('fleet')"><span>▦</span> Vehículos y rutinas</button>
+      <button type="button" [class.active]="tab() === 'orders'" (click)="tab.set('orders')"><span>▤</span> Órdenes de servicio <b>{{ openOrders() }}</b></button>
+      <button type="button" [class.active]="tab() === 'events'" (click)="tab.set('events')"><span>◉</span> Actividad y eventos</button>
+    </nav>
+    <div class="sidebar-note">
+      <span class="live-dot"></span> Mantenimiento conectado
+      <p>Anticipa cada servicio.<br>Cuida cada recorrido.</p>
+    </div>
+    <div class="profile">
+      <span class="avatar light">JF</span>
+      <div>Jefe de flota<small>Vista de demostración</small></div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <span>Operaciones <span class="slash">/</span> Mantenimiento preventivo</span>
+      <span class="date">{{ data().today || 'Conectando…' }} · Bogotá</span>
+    </header>
+    <div class="content">
+      <div class="heading">
+        <div>
+          <span class="eyebrow">CONTROL DE FLOTA</span>
+          <h1>{{ tab() === 'fleet' ? 'Cada vehículo, a tiempo.' : tab() === 'orders' ? 'Servicios bajo control.' : 'Todo queda registrado.' }}</h1>
+          <p>{{ tab() === 'fleet' ? 'Supervisa tus rutinas y anticipa el próximo mantenimiento.' : tab() === 'orders' ? 'Gestiona cotizaciones, aprobaciones y ejecución en un solo lugar.' : 'Consulta los eventos del dominio y su publicación.' }}</p>
+        </div>
+        <button type="button" class="secondary" [disabled]="busy()" (click)="refresh()">↻ Actualizar</button>
+      </div>
+
+      @if (error()) { <div class="alert error" role="alert">{{ error() }}</div> }
+      @if (message()) { <div class="alert success" role="status">{{ message() }}</div> }
+
+      <section class="stats" aria-label="Indicadores">
+        <article><span class="stat-icon green">▦</span><div><p>Vehículos registrados</p><strong>{{ data().vehicles.length }}</strong><small>Flota conectada</small></div></article>
+        <article><span class="stat-icon amber">◷</span><div><p>Rutinas por vencer</p><strong>{{ dueSoon() }}</strong><small>En el último 10 % del intervalo</small></div></article>
+        <article><span class="stat-icon red">!</span><div><p>Rutinas vencidas</p><strong>{{ overdue() }}</strong><small>Requieren mantenimiento</small></div></article>
+        <article><span class="stat-icon blue">▤</span><div><p>Órdenes abiertas</p><strong>{{ openOrders() }}</strong><small>Servicios en curso de gestión</small></div></article>
+      </section>
+
+      @if (!loaded()) {
+        <div class="empty">
+          <h2>Conectando con tu flota</h2>
+          <p>Si la API está iniciando, espera unos segundos y pulsa Actualizar.</p>
+        </div>
+      }
+
+      @if (tab() === 'fleet' && loaded()) {
+        <app-fleet-panel
+          [data]="data()"
+          [selectedId]="selected()"
+          [busy]="busy()"
+          (selectVehicle)="selectVehicle($event)"
+          (createVehicle)="addVehicle($event)"
+          (createRoutine)="addRoutine($event)"
+          (sendReading)="sendReading($event)"
+          (evaluate)="evaluate()" />
+      }
+
+      @if (tab() === 'orders' && loaded()) {
+        <app-orders-panel
+          [data]="data()"
+          [busy]="busy()"
+          (orderAction)="submitOrderAction($event)" />
+      }
+
+      @if (tab() === 'events' && loaded()) {
+        <app-events-panel [data]="data()" />
+      }
+
+      <footer>RutaViva · Mantenimiento preventivo <span>Un recorrido más tranquilo empieza aquí.</span></footer>
+    </div>
+  </main>
+</div>

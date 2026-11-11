@@ -1,0 +1,25 @@
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Actividad reciente</h2>
+      <p>Eventos confirmados junto con cada operación. Publicación local al log de la API.</p>
+    </div>
+  </div>
+  @for (e of data.events; track e.id) {
+    <article class="event-row">
+      <span class="event-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19 19 5M5 5h14v14"/></svg>
+      </span>
+      <div>
+        <strong>{{ e.type }}</strong>
+        <p>{{ e.message }}</p>
+        <small>{{ e.occurredAt | date:'yyyy-MM-dd HH:mm:ss':'-0500' }} · {{ e.id.slice(0, 8) }}</small>
+      </div>
+      <span class="badge" [attr.data-state]="e.publishedAt ? 'Current' : 'Quoted'">
+        {{ e.publishedAt ? 'Publicado' : 'Pendiente' }}
+      </span>
+    </article>
+  } @empty {
+    <p class="empty">Todavía no hay eventos.</p>
+  }
+</section>

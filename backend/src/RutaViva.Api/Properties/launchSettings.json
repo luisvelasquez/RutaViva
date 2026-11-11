@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "RutaViva.Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "health",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Database": "Server=tcp:127.0.0.1,1433;Database=RutaViva;User Id=sa;Password=RutaViva2026_Prueba!;TrustServerCertificate=True;Encrypt=True"
+      },
+      "applicationUrl": "http://localhost:5000"
+    }
+  }
+}

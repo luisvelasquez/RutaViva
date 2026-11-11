@@ -1,0 +1,4 @@
+SELECT Id
+FROM dbo.Vehicles
+ORDER BY Id
+OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY;

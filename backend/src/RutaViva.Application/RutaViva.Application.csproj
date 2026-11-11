@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="../RutaViva.Domain/RutaViva.Domain.csproj" /></ItemGroup></Project>
