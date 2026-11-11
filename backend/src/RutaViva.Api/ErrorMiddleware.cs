@@ -40,13 +40,17 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
     private static string DescribeUniqueness(SqlException sql)
     {
         var text = sql.Message;
-        if (text.Contains("UX_Vehicles_Plate", StringComparison.OrdinalIgnoreCase))
+        if (text.Contains("UX_Vehicles_LicensePlate", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("UX_Vehicles_Plate", StringComparison.OrdinalIgnoreCase))
             return "Ya existe un vehículo con esa placa.";
-        if (text.Contains("UX_Orders_OpenRoutine", StringComparison.OrdinalIgnoreCase))
+        if (text.Contains("UX_ServiceOrders_OpenRoutine", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("UX_Orders_OpenRoutine", StringComparison.OrdinalIgnoreCase))
             return "Ya existe una orden abierta para este vehículo y rutina.";
-        if (text.Contains("UX_Outbox_NoticeCycle", StringComparison.OrdinalIgnoreCase))
+        if (text.Contains("UX_OutboxMessages_DueSoonNotice", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("UX_Outbox_NoticeCycle", StringComparison.OrdinalIgnoreCase))
             return "El aviso de este ciclo ya fue registrado.";
-        if (text.Contains("PK_Receipts", StringComparison.OrdinalIgnoreCase))
+        if (text.Contains("PK_IdempotencyRecords", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("PK_Receipts", StringComparison.OrdinalIgnoreCase))
             return "La clave de idempotencia ya está registrada.";
         return "Conflicto de unicidad en los datos persistidos.";
     }

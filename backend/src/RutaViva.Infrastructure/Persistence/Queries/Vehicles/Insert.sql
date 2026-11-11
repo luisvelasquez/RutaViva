@@ -1,2 +1,12 @@
-INSERT INTO dbo.Vehicles (Id, Version, Plate, Workshop, Odometer)
-VALUES (@Id, @Version, @Plate, @Workshop, @Odometer);
+INSERT INTO dbo.Vehicles (
+    VehicleId,
+    Version,
+    LicensePlate,
+    AssignedWorkshop,
+    OdometerKilometers)
+VALUES (
+    @Id,
+    @Version,
+    @Plate,
+    @Workshop,
+    @Odometer);

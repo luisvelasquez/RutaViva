@@ -1,16 +1,16 @@
 SELECT
-    Id,
+    MaintenanceRoutineId,
     Version,
     VehicleId,
     Name,
-    IntervalKm,
+    IntervalKilometers,
     IntervalDays,
-    LastServiceKm,
+    LastServiceOdometerKilometers,
     LastServiceDate,
-    CycleId,
-    NoticeRaised,
-    CycleCancelled,
+    MaintenanceCycleId,
+    DueSoonNoticeRaised,
+    IsCycleCancelled,
     Status
-FROM dbo.Routines
+FROM dbo.MaintenanceRoutines
 WHERE VehicleId = @vehicleId
 ORDER BY Name;

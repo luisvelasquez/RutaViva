@@ -1,14 +1,14 @@
 SELECT
-    Id,
+    ServiceOrderId,
     Version,
     VehicleId,
-    RoutineId,
-    CycleId,
-    Workshop,
-    State,
-    QuoteAmount,
-    ActualKm,
-    ActualDate,
+    MaintenanceRoutineId,
+    MaintenanceCycleId,
+    AssignedWorkshop,
+    Status,
+    QuoteAmountCop,
+    ActualServiceOdometerKilometers,
+    ActualServiceDate,
     CreatedAt
-FROM dbo.Orders
-WHERE Id = @id;
+FROM dbo.ServiceOrders
+WHERE ServiceOrderId = @id;

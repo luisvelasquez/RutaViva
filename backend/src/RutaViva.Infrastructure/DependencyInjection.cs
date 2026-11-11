@@ -36,6 +36,9 @@ public static class DependencyInjection
         services.AddScoped<IApplicationLock, ApplicationLock>();
         services.AddScoped<IIdempotentExecutor, IdempotentExecutor>();
         services.AddScoped<IMaintenanceOverviewReader, MaintenanceOverviewReader>();
+        services.AddScoped<IVehicleReadStore, VehicleReadStore>();
+        services.AddScoped<IMaintenanceRoutineReadStore, MaintenanceRoutineReadStore>();
+        services.AddScoped<IServiceOrderReadStore, ServiceOrderReadStore>();
 
         return services;
     }

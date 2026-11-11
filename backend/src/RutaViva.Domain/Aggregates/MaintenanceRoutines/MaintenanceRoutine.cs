@@ -37,7 +37,7 @@ public sealed class MaintenanceRoutine : AggregateRoot
         Status = MaintenanceStatus.Current;
     }
 
-    public void EvaluateDueStatus(Kilometres odometer, DateOnly today)
+    public void EvaluateMaintenanceDueDates(Kilometres odometer, DateOnly today)
     {
         if (CycleCancelled)
             return;
@@ -75,13 +75,15 @@ public sealed class MaintenanceRoutine : AggregateRoot
         MarkChanged();
     }
 
-    public void ResetMaintenanceCycle(Kilometres serviceKm, DateOnly serviceDate, DateOnly today)
+    public void ResetMaintenanceCycle(Kilometres actualServiceOdometerKilometers, DateOnly actualServiceDate, DateOnly today)
     {
-        if (serviceKm.Value < LastServiceKm.Value || serviceDate < LastServiceDate || serviceDate > today)
+        if (actualServiceOdometerKilometers.Value < LastServiceKm.Value
+            || actualServiceDate < LastServiceDate
+            || actualServiceDate > today)
             throw new BusinessException("El servicio no puede preceder al anterior ni tener fecha futura.");
 
-        LastServiceKm = serviceKm;
-        LastServiceDate = serviceDate;
+        LastServiceKm = actualServiceOdometerKilometers;
+        LastServiceDate = actualServiceDate;
         CycleId = Guid.NewGuid();
         NoticeRaised = false;
         CycleCancelled = false;

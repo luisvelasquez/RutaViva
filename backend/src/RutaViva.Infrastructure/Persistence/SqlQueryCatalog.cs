@@ -3,9 +3,6 @@ using System.Reflection;
 
 namespace RutaViva.Infrastructure.Persistence;
 
-/// <summary>
-/// Lee consultas .sql embebidas. Los nombres están controlados por la aplicación, nunca por HTTP.
-/// </summary>
 public static class SqlQueryCatalog
 {
     private static readonly ConcurrentDictionary<string, string> Cache = new(StringComparer.Ordinal);
@@ -14,6 +11,7 @@ public static class SqlQueryCatalog
     public static class Vehicles
     {
         public const string GetById = "Vehicles.GetById";
+        public const string List = "Vehicles.List";
         public const string ListIds = "Vehicles.ListIds";
         public const string Insert = "Vehicles.Insert";
         public const string Update = "Vehicles.Update";
@@ -30,6 +28,7 @@ public static class SqlQueryCatalog
     public static class ServiceOrders
     {
         public const string GetById = "ServiceOrders.GetById";
+        public const string List = "ServiceOrders.List";
         public const string FindOpen = "ServiceOrders.FindOpen";
         public const string Insert = "ServiceOrders.Insert";
         public const string Update = "ServiceOrders.Update";
@@ -77,7 +76,6 @@ public static class SqlQueryCatalog
 
     private static bool Matches(string resourceName, string queryName)
     {
-        // Embebido típico: RutaViva.Infrastructure.Persistence.Queries.Vehicles.GetById.sql
         var needle = ".Persistence.Queries." + queryName.Replace('/', '.') + ".sql";
         return resourceName.EndsWith(needle, StringComparison.OrdinalIgnoreCase)
             || resourceName.Contains(queryName.Replace('/', '.') + ".sql", StringComparison.OrdinalIgnoreCase);

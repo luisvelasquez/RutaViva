@@ -2,7 +2,7 @@ using Dapper;
 using RutaViva.Application.Interfaces.Persistence;
 using RutaViva.Domain;
 using RutaViva.Domain.Aggregates.MaintenanceRoutines;
-using RutaViva.Infrastructure.Persistence.Rows;
+using RutaViva.Infrastructure.Persistence.Models;
 using RutaViva.Infrastructure.Persistence.Transactions;
 
 namespace RutaViva.Infrastructure.Persistence.Repositories;
@@ -12,20 +12,20 @@ public sealed class MaintenanceRoutineRepository(SqlUnitOfWork unitOfWork)
 {
     public async Task<MaintenanceRoutine> FindRoutineByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<MaintenanceRoutineRow>(
+        var routineData = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<MaintenanceRoutinePersistenceModel>(
             Command(SqlQueryCatalog.Get(SqlQueryCatalog.MaintenanceRoutines.GetById), new { id }, cancellationToken));
-        if (row is null)
+        if (routineData is null)
             throw new MissingException("Rutina no encontrada.");
-        return Map(row);
+        return Map(routineData);
     }
 
     public async Task<IReadOnlyList<MaintenanceRoutine>> FindRoutinesByVehicleAsync(
         Guid vehicleId,
         CancellationToken cancellationToken)
     {
-        var rows = await UnitOfWork.Connection.QueryAsync<MaintenanceRoutineRow>(
+        var routinesData = await UnitOfWork.Connection.QueryAsync<MaintenanceRoutinePersistenceModel>(
             Command(SqlQueryCatalog.Get(SqlQueryCatalog.MaintenanceRoutines.GetByVehicle), new { vehicleId }, cancellationToken));
-        return rows.Select(Map).ToList();
+        return routinesData.Select(Map).ToList();
     }
 
     public Task InsertRoutineAsync(MaintenanceRoutine routine, CancellationToken cancellationToken) =>
@@ -64,9 +64,18 @@ public sealed class MaintenanceRoutineRepository(SqlUnitOfWork unitOfWork)
         ExpectedVersion = expectedVersion
     };
 
-    private static MaintenanceRoutine Map(MaintenanceRoutineRow row) =>
+    private static MaintenanceRoutine Map(MaintenanceRoutinePersistenceModel routineData) =>
         MaintenanceRoutine.Reconstitute(
-            row.Id, row.Version, row.VehicleId, row.Name, row.IntervalKm, row.IntervalDays,
-            row.LastServiceKm, row.LastServiceDate, row.CycleId, row.NoticeRaised, row.CycleCancelled,
-            Enum.Parse<MaintenanceStatus>(row.Status));
+            routineData.MaintenanceRoutineId,
+            routineData.Version,
+            routineData.VehicleId,
+            routineData.Name,
+            routineData.IntervalKilometers,
+            routineData.IntervalDays,
+            routineData.LastServiceOdometerKilometers,
+            routineData.LastServiceDate,
+            routineData.MaintenanceCycleId,
+            routineData.DueSoonNoticeRaised,
+            routineData.IsCycleCancelled,
+            Enum.Parse<MaintenanceStatus>(routineData.Status));
 }

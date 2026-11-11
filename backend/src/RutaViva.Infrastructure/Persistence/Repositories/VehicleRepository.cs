@@ -2,7 +2,7 @@ using Dapper;
 using RutaViva.Application.Interfaces.Persistence;
 using RutaViva.Domain;
 using RutaViva.Domain.Aggregates.Vehicles;
-using RutaViva.Infrastructure.Persistence.Rows;
+using RutaViva.Infrastructure.Persistence.Models;
 using RutaViva.Infrastructure.Persistence.Transactions;
 
 namespace RutaViva.Infrastructure.Persistence.Repositories;
@@ -12,11 +12,11 @@ public sealed class VehicleRepository(SqlUnitOfWork unitOfWork)
 {
     public async Task<Vehicle> FindVehicleByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<VehicleRow>(
+        var vehicleData = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<VehiclePersistenceModel>(
             Command(SqlQueryCatalog.Get(SqlQueryCatalog.Vehicles.GetById), new { id }, cancellationToken));
-        if (row is null)
+        if (vehicleData is null)
             throw new MissingException("Vehículo no encontrado.");
-        return Vehicle.Reconstitute(row.Id, row.Version, row.Plate, row.Workshop, row.Odometer);
+        return Map(vehicleData);
     }
 
     public async Task<IReadOnlyList<Guid>> ListVehicleIdsAsync(int skip, int take, CancellationToken cancellationToken)
@@ -56,4 +56,12 @@ public sealed class VehicleRepository(SqlUnitOfWork unitOfWork)
         if (affected != 1)
             throw new ConflictException("La información cambió. Actualice y vuelva a intentar.");
     }
+
+    private static Vehicle Map(VehiclePersistenceModel vehicleData) =>
+        Vehicle.Reconstitute(
+            vehicleData.VehicleId,
+            vehicleData.Version,
+            vehicleData.LicensePlate,
+            vehicleData.AssignedWorkshop,
+            vehicleData.OdometerKilometers);
 }

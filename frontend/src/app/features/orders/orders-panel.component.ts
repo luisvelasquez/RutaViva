@@ -68,6 +68,7 @@ export class OrdersPanelComponent {
       body['kilometres'] = raw.kilometres;
       body['date'] = raw.date;
     }
+    // El padre envía PATCH /api/orders/{id} con operation = action.
     this.orderAction.emit({ order, action: this.action, body });
     this.activeOrder = null;
   }

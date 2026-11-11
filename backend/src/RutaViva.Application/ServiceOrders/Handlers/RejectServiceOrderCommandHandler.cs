@@ -20,7 +20,7 @@ public sealed class RejectServiceOrderCommandHandler(
         var order = await orders.FindServiceOrderByIdAsync(command.OrderId, cancellationToken);
         order.RequireVersion(command.ExpectedVersion);
         var original = order.Version;
-        order.RejectQuote();
+        order.RejectServiceQuote();
 
         var routine = await routines.FindRoutineByIdAsync(order.RoutineId, cancellationToken);
         var routineVersion = routine.Version;

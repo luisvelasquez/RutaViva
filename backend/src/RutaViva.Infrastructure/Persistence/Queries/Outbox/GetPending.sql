@@ -1,11 +1,11 @@
 SELECT TOP (@take)
-    Id,
-    Type,
+    OutboxMessageId,
+    EventType,
     AggregateId,
-    CycleId,
-    Message,
+    MaintenanceCycleId,
+    Payload,
     OccurredAt,
     PublishedAt
-FROM dbo.Outbox
+FROM dbo.OutboxMessages
 WHERE PublishedAt IS NULL
 ORDER BY OccurredAt;

@@ -1,4 +1,4 @@
-UPDATE dbo.Outbox
+UPDATE dbo.OutboxMessages
 SET PublishedAt = @now
-WHERE Id = @Id
+WHERE OutboxMessageId = @Id
   AND PublishedAt IS NULL;

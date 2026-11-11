@@ -41,9 +41,9 @@ public sealed class CompleteServiceOrderCommandHandler(
         var vehicle = await vehicles.FindVehicleByIdAsync(order.VehicleId, cancellationToken);
         var vehicleVersion = vehicle.Version;
 
-        order.CompleteService(km, date);
+        order.CompleteServiceOrder(km, date);
         routine.ResetMaintenanceCycle(km, date, clock.Today);
-        vehicle.RegisterOdometerReading(km);
+        vehicle.RecordOdometerReading(km);
 
         await outbox.FlushAsync(order, clock.UtcNow, cancellationToken);
         await orders.SaveServiceOrderAsync(order, orderVersion, cancellationToken);

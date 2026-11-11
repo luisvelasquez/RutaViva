@@ -1,7 +1,7 @@
 using Dapper;
 using RutaViva.Application.Interfaces.Idempotency;
+using RutaViva.Infrastructure.Persistence.Models;
 using RutaViva.Infrastructure.Persistence.Repositories;
-using RutaViva.Infrastructure.Persistence.Rows;
 using RutaViva.Infrastructure.Persistence.Transactions;
 
 namespace RutaViva.Infrastructure.Persistence.Idempotency;
@@ -14,11 +14,13 @@ public sealed class IdempotencyStore(SqlUnitOfWork unitOfWork)
         string key,
         CancellationToken cancellationToken)
     {
-        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<IdempotencyReceiptRow>(Command(
+        var recordData = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<IdempotencyRecordPersistenceModel>(Command(
             SqlQueryCatalog.Get(SqlQueryCatalog.Idempotency.GetReceipt),
             new { scope, key },
             cancellationToken));
-        return row is null ? null : new IdempotencyReceipt(row.Fingerprint, row.Response);
+        return recordData is null
+            ? null
+            : new IdempotencyReceipt(recordData.RequestFingerprint, recordData.StoredResponse);
     }
 
     public Task InsertReceiptAsync(

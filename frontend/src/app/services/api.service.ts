@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { Dashboard } from '../models/dashboard.models';
+import { Dashboard, Order, Routine, Vehicle } from '../models/dashboard.models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -13,14 +13,48 @@ export class ApiService {
     return firstValueFrom(this.http.get<Dashboard>('/api/dashboard'));
   }
 
-  async post(path: string, body: unknown) {
-    const signature = path + ':' + JSON.stringify(body);
+  listVehicles() {
+    return firstValueFrom(this.http.get<Vehicle[]>('/api/vehicles'));
+  }
+
+  getVehicle(vehicleId: string) {
+    return firstValueFrom(this.http.get<Vehicle>(`/api/vehicles/${vehicleId}`));
+  }
+
+  listVehicleRoutines(vehicleId: string) {
+    return firstValueFrom(this.http.get<Routine[]>(`/api/vehicles/${vehicleId}/routines`));
+  }
+
+  listOrders(filters?: { vehicleId?: string; status?: string }) {
+    let params = new HttpParams();
+    if (filters?.vehicleId) params = params.set('vehicleId', filters.vehicleId);
+    if (filters?.status) params = params.set('status', filters.status);
+    return firstValueFrom(this.http.get<Order[]>('/api/orders', { params }));
+  }
+
+  getOrder(orderId: string) {
+    return firstValueFrom(this.http.get<Order>(`/api/orders/${orderId}`));
+  }
+
+  post(path: string, body: unknown) {
+    return this.write('POST', path, body);
+  }
+
+  patch(path: string, body: unknown) {
+    return this.write('PATCH', path, body);
+  }
+
+  private async write(method: 'POST' | 'PATCH', path: string, body: unknown) {
+    const signature = method + ':' + path + ':' + JSON.stringify(body);
     const key = this.pending.get(signature) || crypto.randomUUID();
     this.pending.set(signature, key);
     this.persist();
     try {
       const result = await firstValueFrom(
-        this.http.post('/api' + path, body, { headers: new HttpHeaders({ 'Idempotency-Key': key }) })
+        this.http.request(method, '/api' + path, {
+          body,
+          headers: new HttpHeaders({ 'Idempotency-Key': key })
+        })
       );
       this.pending.delete(signature);
       this.persist();

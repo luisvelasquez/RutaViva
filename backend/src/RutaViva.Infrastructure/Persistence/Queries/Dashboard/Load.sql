@@ -1,20 +1,50 @@
-SELECT Id, Version, Plate, Workshop, Odometer
+SELECT
+    VehicleId,
+    Version,
+    LicensePlate,
+    AssignedWorkshop,
+    OdometerKilometers
 FROM dbo.Vehicles
-ORDER BY Plate;
+ORDER BY LicensePlate;
 
 SELECT
-    Id, Version, VehicleId, Name, IntervalKm, IntervalDays,
-    LastServiceKm, LastServiceDate, CycleId, NoticeRaised, CycleCancelled, Status
-FROM dbo.Routines
+    MaintenanceRoutineId,
+    Version,
+    VehicleId,
+    Name,
+    IntervalKilometers,
+    IntervalDays,
+    LastServiceOdometerKilometers,
+    LastServiceDate,
+    MaintenanceCycleId,
+    DueSoonNoticeRaised,
+    IsCycleCancelled,
+    Status
+FROM dbo.MaintenanceRoutines
 ORDER BY Name;
 
 SELECT
-    Id, Version, VehicleId, RoutineId, CycleId, Workshop, State,
-    QuoteAmount, ActualKm, ActualDate, CreatedAt
-FROM dbo.Orders
+    ServiceOrderId,
+    Version,
+    VehicleId,
+    MaintenanceRoutineId,
+    MaintenanceCycleId,
+    AssignedWorkshop,
+    Status,
+    QuoteAmountCop,
+    ActualServiceOdometerKilometers,
+    ActualServiceDate,
+    CreatedAt
+FROM dbo.ServiceOrders
 ORDER BY CreatedAt DESC;
 
 SELECT TOP (100)
-    Id, Type, AggregateId, CycleId, Message, OccurredAt, PublishedAt
-FROM dbo.Outbox
+    OutboxMessageId,
+    EventType,
+    AggregateId,
+    MaintenanceCycleId,
+    Payload,
+    OccurredAt,
+    PublishedAt
+FROM dbo.OutboxMessages
 ORDER BY OccurredAt DESC;

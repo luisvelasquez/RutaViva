@@ -1,6 +1,6 @@
 SELECT
-    Fingerprint,
-    Response
-FROM dbo.Receipts
+    RequestFingerprint,
+    StoredResponse
+FROM dbo.IdempotencyRecords
 WHERE Scope = @scope
-  AND [Key] = @key;
+  AND IdempotencyKey = @key;

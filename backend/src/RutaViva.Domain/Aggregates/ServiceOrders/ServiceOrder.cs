@@ -38,22 +38,22 @@ public sealed class ServiceOrder : AggregateRoot
 
     public const decimal AutomaticApprovalCeilingCop = 1_500_000m;
 
-    public void Quote(MoneyCop money)
+    public void SubmitServiceQuote(MoneyCop quoteAmountCop)
     {
         RequireState(OrderState.Created);
-        QuotedAmount = money;
-        State = money.Amount <= AutomaticApprovalCeilingCop ? OrderState.Approved : OrderState.Quoted;
+        QuotedAmount = quoteAmountCop;
+        State = quoteAmountCop.Amount <= AutomaticApprovalCeilingCop ? OrderState.Approved : OrderState.Quoted;
         MarkChanged();
     }
 
-    public void ApproveQuote()
+    public void ApproveServiceQuote()
     {
         RequireState(OrderState.Quoted);
         State = OrderState.Approved;
         MarkChanged();
     }
 
-    public void RejectQuote()
+    public void RejectServiceQuote()
     {
         RequireState(OrderState.Quoted);
         State = OrderState.Cancelled;
@@ -75,11 +75,11 @@ public sealed class ServiceOrder : AggregateRoot
         MarkChanged();
     }
 
-    public void CompleteService(Kilometres km, DateOnly date)
+    public void CompleteServiceOrder(Kilometres actualServiceOdometerKilometers, DateOnly actualServiceDate)
     {
         RequireState(OrderState.InProgress);
-        ActualKm = km;
-        ActualDate = date;
+        ActualKm = actualServiceOdometerKilometers;
+        ActualDate = actualServiceDate;
         State = OrderState.Completed;
         Raise(DomainEventFactory.ServiceCompleted(Id, CycleId));
     }

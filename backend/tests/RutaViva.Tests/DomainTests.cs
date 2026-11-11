@@ -27,7 +27,7 @@ public sealed class DomainTests
     public void Kilometre_boundaries(decimal odometer, MaintenanceStatus expected)
     {
         var r = Routine();
-        r.EvaluateDueStatus(new Kilometres(odometer), Today);
+        r.EvaluateMaintenanceDueDates(new Kilometres(odometer), Today);
         Assert.Equal(expected, r.Status);
     }
 
@@ -39,7 +39,7 @@ public sealed class DomainTests
     public void Time_boundaries(int elapsed, MaintenanceStatus expected)
     {
         var r = Routine();
-        r.EvaluateDueStatus(new Kilometres(20000), Today.AddDays(elapsed));
+        r.EvaluateMaintenanceDueDates(new Kilometres(20000), Today.AddDays(elapsed));
         Assert.Equal(expected, r.Status);
     }
 
@@ -47,11 +47,11 @@ public sealed class DomainTests
     public void Whichever_interval_occurs_first_wins()
     {
         var r = Routine();
-        r.EvaluateDueStatus(new Kilometres(20001), Today.AddDays(180));
+        r.EvaluateMaintenanceDueDates(new Kilometres(20001), Today.AddDays(180));
         Assert.Equal(MaintenanceStatus.Overdue, r.Status);
 
         var other = Routine();
-        other.EvaluateDueStatus(new Kilometres(30000), Today.AddDays(1));
+        other.EvaluateMaintenanceDueDates(new Kilometres(30000), Today.AddDays(1));
         Assert.Equal(MaintenanceStatus.Overdue, other.Status);
     }
 
@@ -59,12 +59,12 @@ public sealed class DomainTests
     public void Warning_only_once_per_cycle_and_enabled_after_reset()
     {
         var r = Routine();
-        r.EvaluateDueStatus(new Kilometres(29000), Today);
+        r.EvaluateMaintenanceDueDates(new Kilometres(29000), Today);
         Assert.Single(r.DomainEvents);
         Assert.Equal(DomainEventTypes.MaintenanceDueSoon, r.DomainEvents[0].Type);
         r.DequeueDomainEvents();
 
-        r.EvaluateDueStatus(new Kilometres(29500), Today);
+        r.EvaluateMaintenanceDueDates(new Kilometres(29500), Today);
         Assert.Empty(r.DomainEvents);
 
         var cycle = r.CycleId;
@@ -73,7 +73,7 @@ public sealed class DomainTests
         Assert.False(r.NoticeRaised);
         Assert.Equal(MaintenanceStatus.Current, r.Status);
 
-        r.EvaluateDueStatus(new Kilometres(39000), Today);
+        r.EvaluateMaintenanceDueDates(new Kilometres(39000), Today);
         Assert.Single(r.DomainEvents);
     }
 
@@ -81,7 +81,7 @@ public sealed class DomainTests
     public void Jump_directly_to_overdue_does_not_send_late_warning()
     {
         var r = Routine();
-        r.EvaluateDueStatus(new Kilometres(30000), Today);
+        r.EvaluateMaintenanceDueDates(new Kilometres(30000), Today);
         Assert.Empty(r.DomainEvents);
         Assert.Equal(MaintenanceStatus.Overdue, r.Status);
     }
@@ -92,7 +92,7 @@ public sealed class DomainTests
     public void Equal_or_old_readings_ignored(decimal reading)
     {
         var v = new Vehicle("abc123", "Taller", new Kilometres(25000));
-        Assert.False(v.RegisterOdometerReading(new Kilometres(reading)));
+        Assert.False(v.RecordOdometerReading(new Kilometres(reading)));
         Assert.Equal(25000, v.Odometer.Value);
         Assert.Equal(1, v.Version);
     }
@@ -101,7 +101,7 @@ public sealed class DomainTests
     public void Greater_reading_accepted()
     {
         var v = new Vehicle("abc123", "Taller", new Kilometres(25000));
-        Assert.True(v.RegisterOdometerReading(new Kilometres(25001)));
+        Assert.True(v.RecordOdometerReading(new Kilometres(25001)));
         Assert.Equal(25001, v.Odometer.Value);
     }
 
@@ -112,7 +112,7 @@ public sealed class DomainTests
     public void Approval_threshold(decimal amount, OrderState expected)
     {
         var o = Order();
-        o.Quote(new MoneyCop(amount));
+        o.SubmitServiceQuote(new MoneyCop(amount));
         Assert.Equal(expected, o.State);
     }
 
@@ -120,10 +120,10 @@ public sealed class DomainTests
     public void Normal_manual_approval_flow()
     {
         var o = Order();
-        o.Quote(new MoneyCop(2000000));
-        o.ApproveQuote();
+        o.SubmitServiceQuote(new MoneyCop(2000000));
+        o.ApproveServiceQuote();
         o.StartService();
-        o.CompleteService(new Kilometres(50000), Today);
+        o.CompleteServiceOrder(new Kilometres(50000), Today);
         Assert.Equal(OrderState.Completed, o.State);
         Assert.Contains(o.DomainEvents, e => e.Type == DomainEventTypes.ServiceCompleted);
         Assert.False(o.IsOpen);
@@ -133,8 +133,8 @@ public sealed class DomainTests
     public void Rejection_cancels_order()
     {
         var o = Order();
-        o.Quote(new MoneyCop(2000000));
-        o.RejectQuote();
+        o.SubmitServiceQuote(new MoneyCop(2000000));
+        o.RejectServiceQuote();
         Assert.Equal(OrderState.Cancelled, o.State);
     }
 
@@ -146,12 +146,12 @@ public sealed class DomainTests
         Assert.False(created.IsOpen);
 
         var quoted = Order();
-        quoted.Quote(new MoneyCop(2000000));
+        quoted.SubmitServiceQuote(new MoneyCop(2000000));
         quoted.Cancel();
         Assert.False(quoted.IsOpen);
 
         var approved = Order();
-        approved.Quote(new MoneyCop(100));
+        approved.SubmitServiceQuote(new MoneyCop(100));
         approved.Cancel();
         Assert.False(approved.IsOpen);
     }
@@ -160,8 +160,8 @@ public sealed class DomainTests
     public void Cannot_cancel_after_start_or_complete_without_start()
     {
         var o = Order();
-        Assert.Throws<BusinessException>(() => o.CompleteService(new Kilometres(100), Today));
-        o.Quote(new MoneyCop(100));
+        Assert.Throws<BusinessException>(() => o.CompleteServiceOrder(new Kilometres(100), Today));
+        o.SubmitServiceQuote(new MoneyCop(100));
         o.StartService();
         Assert.Throws<BusinessException>(o.Cancel);
     }
@@ -171,16 +171,16 @@ public sealed class DomainTests
     {
         var o = Order();
         Assert.Throws<BusinessException>(o.StartService);
-        Assert.Throws<BusinessException>(o.ApproveQuote);
-        o.Quote(new MoneyCop(100));
-        Assert.Throws<BusinessException>(() => o.Quote(new MoneyCop(200)));
+        Assert.Throws<BusinessException>(o.ApproveServiceQuote);
+        o.SubmitServiceQuote(new MoneyCop(100));
+        Assert.Throws<BusinessException>(() => o.SubmitServiceQuote(new MoneyCop(200)));
     }
 
     [Fact]
     public void Stale_version_rejected()
     {
         var o = Order();
-        o.Quote(new MoneyCop(100));
+        o.SubmitServiceQuote(new MoneyCop(100));
         Assert.Throws<ConflictException>(() => o.RequireVersion(1));
         o.RequireVersion(2);
     }
@@ -216,7 +216,7 @@ public sealed class DomainTests
     {
         var r = Routine();
         r.SuppressCancelledCycle();
-        r.EvaluateDueStatus(new Kilometres(30000), Today.AddDays(200));
+        r.EvaluateMaintenanceDueDates(new Kilometres(30000), Today.AddDays(200));
         Assert.Empty(r.DomainEvents);
         Assert.True(r.CycleCancelled);
     }
@@ -225,11 +225,11 @@ public sealed class DomainTests
     public void Single_dimension_routines_supported()
     {
         var km = Routine(10000, null);
-        km.EvaluateDueStatus(new Kilometres(20000), Today.AddDays(1000));
+        km.EvaluateMaintenanceDueDates(new Kilometres(20000), Today.AddDays(1000));
         Assert.Equal(MaintenanceStatus.Current, km.Status);
 
         var time = Routine(null, 180);
-        time.EvaluateDueStatus(new Kilometres(100000), Today);
+        time.EvaluateMaintenanceDueDates(new Kilometres(100000), Today);
         Assert.Equal(MaintenanceStatus.Current, time.Status);
     }
 

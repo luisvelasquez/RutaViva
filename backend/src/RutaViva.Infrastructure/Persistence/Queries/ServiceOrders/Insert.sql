@@ -1,14 +1,14 @@
-INSERT INTO dbo.Orders (
-    Id,
+INSERT INTO dbo.ServiceOrders (
+    ServiceOrderId,
     Version,
     VehicleId,
-    RoutineId,
-    CycleId,
-    Workshop,
-    State,
-    QuoteAmount,
-    ActualKm,
-    ActualDate,
+    MaintenanceRoutineId,
+    MaintenanceCycleId,
+    AssignedWorkshop,
+    Status,
+    QuoteAmountCop,
+    ActualServiceOdometerKilometers,
+    ActualServiceDate,
     CreatedAt)
 VALUES (
     @Id,

@@ -19,7 +19,7 @@ public sealed class DueMaintenanceCoordinator(
 {
     public async Task EvaluateRoutineAsync(Vehicle vehicle, MaintenanceRoutine routine, CancellationToken cancellationToken)
     {
-        routine.EvaluateDueStatus(vehicle.Odometer, clock.Today);
+        routine.EvaluateMaintenanceDueDates(vehicle.Odometer, clock.Today);
         await outbox.FlushAsync(routine, clock.UtcNow, cancellationToken);
 
         if (routine.Status != MaintenanceStatus.Overdue || routine.CycleCancelled)

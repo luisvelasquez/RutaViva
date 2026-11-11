@@ -156,8 +156,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
                 new RegisterOdometerReadingCommand(ids.Vehicle, 100, Ctx("test", "repeat", "same")), ct))));
         Assert.Single(results.Distinct());
         await using var db = Db();
-        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Orders"));
-        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Receipts WHERE Scope='test'"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.ServiceOrders"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.IdempotencyRecords WHERE Scope='test'"));
     }
 
     [SqlFact]
@@ -173,8 +173,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Task.WhenAll(tasks);
 
         await using var db = Db();
-        Assert.Equal(111, await db.ExecuteScalarAsync<decimal>("SELECT Odometer FROM dbo.Vehicles"));
-        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Orders"));
+        Assert.Equal(111, await db.ExecuteScalarAsync<decimal>("SELECT OdometerKilometers FROM dbo.Vehicles"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.ServiceOrders"));
     }
 
     [SqlFact]
@@ -186,7 +186,7 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
                 new EvaluateDueMaintenanceCommand(Ctx("test", "daily" + n, "same")), ct))));
 
         await using var db = Db();
-        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Outbox WHERE Type='MaintenanceDueSoon'"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.OutboxMessages WHERE EventType='MaintenanceDueSoon'"));
     }
 
     [SqlFact]
@@ -200,7 +200,7 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
                 new RegisterOdometerReadingCommand(ids.Vehicle, 20, Ctx("test", "key", "different")), ct), "different"));
 
         await using var db = Db();
-        Assert.Equal(10, await db.ExecuteScalarAsync<decimal>("SELECT Odometer FROM dbo.Vehicles"));
+        Assert.Equal(10, await db.ExecuteScalarAsync<decimal>("SELECT OdometerKilometers FROM dbo.Vehicles"));
     }
 
     [SqlFact]
@@ -210,9 +210,9 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Command("daily", async (s, ct) => await s.Evaluate.Handle(
             new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var db = Db();
-        var cycleId = await db.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines");
+        var cycleId = await db.ExecuteScalarAsync<Guid>("SELECT MaintenanceCycleId FROM dbo.MaintenanceRoutines");
         await Assert.ThrowsAsync<SqlException>(() => db.ExecuteAsync("""
-            INSERT dbo.Orders(Id,Version,VehicleId,RoutineId,CycleId,Workshop,State,CreatedAt)
+            INSERT dbo.ServiceOrders(ServiceOrderId,Version,VehicleId,MaintenanceRoutineId,MaintenanceCycleId,AssignedWorkshop,Status,CreatedAt)
             VALUES(@id,1,@Vehicle,@Routine,@cycle,'Taller','Created',@now)
             """, new { id = Guid.NewGuid(), ids.Vehicle, ids.Routine, cycle = cycleId, now = clock.UtcNow }));
     }
@@ -224,7 +224,7 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Command("daily", async (s, ct) => await s.Evaluate.Handle(
             new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var query = Db();
-        var orderId = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
+        var orderId = await query.ExecuteScalarAsync<Guid>("SELECT ServiceOrderId FROM dbo.ServiceOrders");
 
         await Command("quote", async (s, ct) => await s.Quote.Handle(
             new QuoteServiceOrderCommand(orderId, 1, 100, Ctx("test", "quote", "same")), ct));
@@ -235,10 +235,10 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
                 new CompleteServiceOrderCommand(orderId, 3, 100, clock.Today.AddDays(1), Ctx("test", "bad-complete", "same")), ct)));
 
         await using var db = Db();
-        Assert.Equal("InProgress", await db.ExecuteScalarAsync<string>("SELECT State FROM dbo.Orders"));
-        Assert.Equal(0, await db.ExecuteScalarAsync<decimal>("SELECT LastServiceKm FROM dbo.Routines"));
-        Assert.False(await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Receipts WHERE [Key]='bad-complete'") > 0);
-        Assert.False(await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Outbox WHERE Type='ServiceCompleted'") > 0);
+        Assert.Equal("InProgress", await db.ExecuteScalarAsync<string>("SELECT Status FROM dbo.ServiceOrders"));
+        Assert.Equal(0, await db.ExecuteScalarAsync<decimal>("SELECT LastServiceOdometerKilometers FROM dbo.MaintenanceRoutines"));
+        Assert.False(await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.IdempotencyRecords WHERE IdempotencyKey='bad-complete'") > 0);
+        Assert.False(await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.OutboxMessages WHERE EventType='ServiceCompleted'") > 0);
     }
 
     [SqlFact]
@@ -248,7 +248,7 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Command("daily", async (s, ct) => await s.Evaluate.Handle(
             new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var query = Db();
-        var id = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
+        var id = await query.ExecuteScalarAsync<Guid>("SELECT ServiceOrderId FROM dbo.ServiceOrders");
         await Command("quote", async (s, ct) => await s.Quote.Handle(
             new QuoteServiceOrderCommand(id, 1, 100, Ctx("test", "quote", "same")), ct));
 
@@ -279,20 +279,20 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Command("daily", async (s, ct) => await s.Evaluate.Handle(
             new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var query = Db();
-        var id = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
+        var id = await query.ExecuteScalarAsync<Guid>("SELECT ServiceOrderId FROM dbo.ServiceOrders");
         await Command("quote", async (s, ct) => await s.Quote.Handle(
             new QuoteServiceOrderCommand(id, 1, 100, Ctx("test", "quote", "same")), ct));
         await Command("start", async (s, ct) => await s.Start.Handle(
             new StartServiceOrderCommand(id, 2, Ctx("test", "start", "same")), ct));
 
         await using var before = Db();
-        var cycleBeforeComplete = await before.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines");
+        var cycleBeforeComplete = await before.ExecuteScalarAsync<Guid>("SELECT MaintenanceCycleId FROM dbo.MaintenanceRoutines");
 
         var first = await Command("complete", async (s, ct) => await s.Complete.Handle(
             new CompleteServiceOrderCommand(id, 3, 110, clock.Today, Ctx("test", "complete", "same")), ct));
 
         await using var mid = Db();
-        var cycleAfterComplete = await mid.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines");
+        var cycleAfterComplete = await mid.ExecuteScalarAsync<Guid>("SELECT MaintenanceCycleId FROM dbo.MaintenanceRoutines");
         Assert.NotEqual(cycleBeforeComplete, cycleAfterComplete);
 
         var replay = await Command("complete", async (s, ct) => await s.Complete.Handle(
@@ -307,11 +307,11 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         Assert.Equal(firstDto.GetProperty("version").GetInt64(), replayDto.GetProperty("version").GetInt64());
 
         await using var db = Db();
-        Assert.Equal(cycleAfterComplete, await db.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines"));
-        Assert.Equal(110, await db.ExecuteScalarAsync<decimal>("SELECT LastServiceKm FROM dbo.Routines"));
-        Assert.Equal("Current", await db.ExecuteScalarAsync<string>("SELECT Status FROM dbo.Routines"));
-        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Outbox WHERE Type='ServiceCompleted'"));
-        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Receipts WHERE [Key]='complete'"));
+        Assert.Equal(cycleAfterComplete, await db.ExecuteScalarAsync<Guid>("SELECT MaintenanceCycleId FROM dbo.MaintenanceRoutines"));
+        Assert.Equal(110, await db.ExecuteScalarAsync<decimal>("SELECT LastServiceOdometerKilometers FROM dbo.MaintenanceRoutines"));
+        Assert.Equal("Current", await db.ExecuteScalarAsync<string>("SELECT Status FROM dbo.MaintenanceRoutines"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.OutboxMessages WHERE EventType='ServiceCompleted'"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.IdempotencyRecords WHERE IdempotencyKey='complete'"));
     }
 
     [SqlFact]
@@ -321,8 +321,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Command("daily", async (s, ct) => await s.Evaluate.Handle(
             new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
         await using var query = Db();
-        var id = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
-        var vehicleId = await query.ExecuteScalarAsync<Guid>("SELECT VehicleId FROM dbo.Orders");
+        var id = await query.ExecuteScalarAsync<Guid>("SELECT ServiceOrderId FROM dbo.ServiceOrders");
+        var vehicleId = await query.ExecuteScalarAsync<Guid>("SELECT VehicleId FROM dbo.ServiceOrders");
         await Command("quote", async (s, ct) => await s.Quote.Handle(
             new QuoteServiceOrderCommand(id, 1, 100, Ctx("test", "quote", "same")), ct));
         await Command("start", async (s, ct) => await s.Start.Handle(
@@ -336,8 +336,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Task.WhenAll(complete, reading);
 
         await using var db = Db();
-        Assert.Equal("Completed", await db.ExecuteScalarAsync<string>("SELECT State FROM dbo.Orders"));
-        Assert.Equal(120, await db.ExecuteScalarAsync<decimal>("SELECT Odometer FROM dbo.Vehicles"));
+        Assert.Equal("Completed", await db.ExecuteScalarAsync<string>("SELECT Status FROM dbo.ServiceOrders"));
+        Assert.Equal(120, await db.ExecuteScalarAsync<decimal>("SELECT OdometerKilometers FROM dbo.Vehicles"));
     }
 
     [SqlFact]

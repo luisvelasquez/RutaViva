@@ -1,15 +1,15 @@
-INSERT INTO dbo.Routines (
-    Id,
+INSERT INTO dbo.MaintenanceRoutines (
+    MaintenanceRoutineId,
     Version,
     VehicleId,
     Name,
-    IntervalKm,
+    IntervalKilometers,
     IntervalDays,
-    LastServiceKm,
+    LastServiceOdometerKilometers,
     LastServiceDate,
-    CycleId,
-    NoticeRaised,
-    CycleCancelled,
+    MaintenanceCycleId,
+    DueSoonNoticeRaised,
+    IsCycleCancelled,
     Status)
 VALUES (
     @Id,

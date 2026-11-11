@@ -1,8 +1,8 @@
 SELECT
-    Id,
+    VehicleId,
     Version,
-    Plate,
-    Workshop,
-    Odometer
+    LicensePlate,
+    AssignedWorkshop,
+    OdometerKilometers
 FROM dbo.Vehicles
-WHERE Id = @id;
+WHERE VehicleId = @id;

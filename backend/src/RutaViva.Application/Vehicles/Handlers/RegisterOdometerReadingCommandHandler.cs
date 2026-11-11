@@ -24,7 +24,7 @@ public sealed class RegisterOdometerReadingCommandHandler(
 
         var vehicle = await vehicles.FindVehicleByIdAsync(command.VehicleId, cancellationToken);
         var originalVersion = vehicle.Version;
-        var accepted = vehicle.RegisterOdometerReading(new Kilometres(command.Kilometres));
+        var accepted = vehicle.RecordOdometerReading(new Kilometres(command.Kilometres));
 
         if (accepted)
         {

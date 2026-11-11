@@ -1,5 +1,5 @@
 SELECT COUNT(1)
-FROM dbo.Orders
+FROM dbo.ServiceOrders
 WHERE VehicleId = @vehicleId
-  AND RoutineId = @routineId
-  AND State NOT IN ('Completed', 'Cancelled');
+  AND MaintenanceRoutineId = @routineId
+  AND Status NOT IN (N'Completed', N'Cancelled');

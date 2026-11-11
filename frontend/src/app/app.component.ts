@@ -50,13 +50,13 @@ export class AppComponent {
     this.fleet()?.syncReading(this.data().vehicles.find(v => v.id === id));
   }
 
-  async execute(path: string, body: unknown, success: string) {
+  async execute(path: string, body: unknown, success: string, method: 'POST' | 'PATCH' = 'POST') {
     if (this.busy()) return null;
     this.busy.set(true);
     this.error.set('');
     this.message.set('');
     try {
-      const result = await this.api.post(path, body);
+      const result = method === 'PATCH' ? await this.api.patch(path, body) : await this.api.post(path, body);
       this.message.set(success);
       await this.refresh();
       return result;
@@ -108,7 +108,8 @@ export class AppComponent {
   }
 
   submitOrderAction(event: { order: Order; action: string; body: Record<string, unknown> }) {
-    return this.execute(`/orders/${event.order.id}/${event.action}`, event.body, 'Orden actualizada.');
+    const body = { operation: event.action, ...event.body };
+    return this.execute(`/orders/${event.order.id}`, body, 'Orden actualizada.', 'PATCH');
   }
 
   private report(e: unknown) {

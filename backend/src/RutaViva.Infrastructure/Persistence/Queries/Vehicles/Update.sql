@@ -1,8 +1,8 @@
 UPDATE dbo.Vehicles
 SET
     Version = @Version,
-    Plate = @Plate,
-    Workshop = @Workshop,
-    Odometer = @Odometer
-WHERE Id = @Id
+    LicensePlate = @Plate,
+    AssignedWorkshop = @Workshop,
+    OdometerKilometers = @Odometer
+WHERE VehicleId = @Id
   AND Version = @ExpectedVersion;

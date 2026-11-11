@@ -1,14 +1,14 @@
-UPDATE dbo.Routines
+UPDATE dbo.MaintenanceRoutines
 SET
     Version = @Version,
     Name = @Name,
-    IntervalKm = @IntervalKm,
+    IntervalKilometers = @IntervalKm,
     IntervalDays = @IntervalDays,
-    LastServiceKm = @LastServiceKm,
+    LastServiceOdometerKilometers = @LastServiceKm,
     LastServiceDate = @LastServiceDate,
-    CycleId = @CycleId,
-    NoticeRaised = @NoticeRaised,
-    CycleCancelled = @CycleCancelled,
+    MaintenanceCycleId = @CycleId,
+    DueSoonNoticeRaised = @NoticeRaised,
+    IsCycleCancelled = @CycleCancelled,
     Status = @Status
-WHERE Id = @Id
+WHERE MaintenanceRoutineId = @Id
   AND Version = @ExpectedVersion;

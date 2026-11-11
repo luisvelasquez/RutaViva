@@ -1,9 +1,10 @@
-UPDATE dbo.Orders
+UPDATE dbo.ServiceOrders
 SET
     Version = @Version,
-    State = @State,
-    QuoteAmount = @QuoteAmount,
-    ActualKm = @ActualKm,
-    ActualDate = @ActualDate
-WHERE Id = @Id
+    AssignedWorkshop = @Workshop,
+    Status = @State,
+    QuoteAmountCop = @QuoteAmount,
+    ActualServiceOdometerKilometers = @ActualKm,
+    ActualServiceDate = @ActualDate
+WHERE ServiceOrderId = @Id
   AND Version = @ExpectedVersion;

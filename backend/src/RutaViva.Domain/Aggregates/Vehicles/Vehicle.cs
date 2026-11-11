@@ -30,13 +30,13 @@ public sealed class Vehicle : AggregateRoot
         Odometer = odometer;
     }
 
-    /// <summary>Ignora menor o igual sin error; solo avanza el odómetro.</summary>
-    public bool RegisterOdometerReading(Kilometres reading)
+    /// <summary>Records a higher odometer reading; equal or lower readings are ignored without error.</summary>
+    public bool RecordOdometerReading(Kilometres reportedOdometerKilometers)
     {
-        if (reading.IsLessOrEqual(Odometer))
+        if (reportedOdometerKilometers.IsLessOrEqual(Odometer))
             return false;
 
-        Odometer = reading;
+        Odometer = reportedOdometerKilometers;
         MarkChanged();
         return true;
     }

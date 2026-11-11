@@ -15,5 +15,5 @@ public sealed class ApproveServiceOrderCommandHandler(
 {
     public Task<ServiceOrderDto> Handle(ApproveServiceOrderCommand command, CancellationToken cancellationToken) =>
         ServiceOrderTransitionExecutor.TransitionAsync(
-            orders, outbox, clock, command.OrderId, command.ExpectedVersion, o => o.ApproveQuote(), cancellationToken);
+            orders, outbox, clock, command.OrderId, command.ExpectedVersion, o => o.ApproveServiceQuote(), cancellationToken);
 }

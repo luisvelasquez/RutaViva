@@ -8,19 +8,24 @@ using RutaViva.Application.MaintenanceRoutines.Commands;
 namespace RutaViva.Api.Controllers;
 
 [ApiController]
-[Tags("Dashboard")]
+[Tags("Maintenance")]
 public sealed class MaintenanceOverviewController(IMediator mediator) : ControllerBase
 {
-    /// <summary>Consulta de lectura del tablero de mantenimiento (sin efectos).</summary>
+    /// <summary>Read-only maintenance summary for the demo UI (vehicles, routines, orders, events).</summary>
     [HttpGet("api/dashboard")]
     [ProducesResponseType(typeof(MaintenanceOverviewDto), StatusCodes.Status200OK)]
     public Task<MaintenanceOverviewDto> GetMaintenanceDashboard(CancellationToken cancellationToken) =>
         mediator.Send(new GetMaintenanceOverviewQuery(), cancellationToken);
 
-    /// <summary>Ejecuta la revisión diaria por tiempo (también la dispara DailyMaintenanceWorker).</summary>
+    /// <summary>
+    /// Manually runs maintenance evaluation (same rules as the daily worker).
+    /// May create due-soon notices and open service orders when routines become overdue.
+    /// Prefer the worker for scheduled runs; use this endpoint for demos and troubleshooting.
+    /// </summary>
     [HttpPost("api/maintenance/evaluate")]
     [ProducesResponseType(typeof(EvaluateDueMaintenanceResult), StatusCodes.Status200OK)]
-    public Task<EvaluateDueMaintenanceResult> EvaluateDueMaintenance(
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public Task<EvaluateDueMaintenanceResult> EvaluateMaintenanceDueDates(
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
         CancellationToken cancellationToken)
     {

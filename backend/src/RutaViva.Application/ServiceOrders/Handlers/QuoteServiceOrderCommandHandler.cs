@@ -16,7 +16,7 @@ public sealed class QuoteServiceOrderCommandHandler(IServiceOrderRepository orde
         var order = await orders.FindServiceOrderByIdAsync(command.OrderId, cancellationToken);
         order.RequireVersion(command.ExpectedVersion);
         var original = order.Version;
-        order.Quote(new MoneyCop(command.Amount));
+        order.SubmitServiceQuote(new MoneyCop(command.Amount));
         await ServiceOrderTransitionExecutor.PersistAsync(order, original, outbox, clock, orders, cancellationToken);
         return order.ToDto();
     }

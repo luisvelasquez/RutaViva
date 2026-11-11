@@ -1,4 +1,6 @@
 -- Ejecutar conectado a la base RutaViva.
+-- Esquema con nombres en ingles (dominio claro). Para bases existentes con nombres cortos
+-- (Vehicles.Id / Routines / Orders / Receipts / Outbox) usar 03_migrate_existing_to_english.sql.
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 SET ANSI_PADDING ON;
@@ -11,87 +13,87 @@ GO
 IF OBJECT_ID('dbo.Vehicles','U') IS NULL
 BEGIN
     CREATE TABLE dbo.Vehicles (
-        Id uniqueidentifier NOT NULL CONSTRAINT PK_Vehicles PRIMARY KEY,
+        VehicleId uniqueidentifier NOT NULL CONSTRAINT PK_Vehicles PRIMARY KEY,
         Version bigint NOT NULL,
-        Plate nvarchar(20) NOT NULL,
-        Workshop nvarchar(120) NOT NULL,
-        Odometer decimal(18,2) NOT NULL CONSTRAINT CK_Vehicles_Odometer CHECK (Odometer >= 0),
-        CONSTRAINT UX_Vehicles_Plate UNIQUE (Plate)
+        LicensePlate nvarchar(20) NOT NULL,
+        AssignedWorkshop nvarchar(120) NOT NULL,
+        OdometerKilometers decimal(18,2) NOT NULL CONSTRAINT CK_Vehicles_OdometerKilometers CHECK (OdometerKilometers >= 0),
+        CONSTRAINT UX_Vehicles_LicensePlate UNIQUE (LicensePlate)
     );
 END;
 GO
 
-IF OBJECT_ID('dbo.Routines','U') IS NULL
+IF OBJECT_ID('dbo.MaintenanceRoutines','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.Routines (
-        Id uniqueidentifier NOT NULL CONSTRAINT PK_Routines PRIMARY KEY,
+    CREATE TABLE dbo.MaintenanceRoutines (
+        MaintenanceRoutineId uniqueidentifier NOT NULL CONSTRAINT PK_MaintenanceRoutines PRIMARY KEY,
         Version bigint NOT NULL,
-        VehicleId uniqueidentifier NOT NULL CONSTRAINT FK_Routines_Vehicles REFERENCES dbo.Vehicles(Id),
+        VehicleId uniqueidentifier NOT NULL CONSTRAINT FK_MaintenanceRoutines_Vehicles REFERENCES dbo.Vehicles(VehicleId),
         Name nvarchar(100) NOT NULL,
-        IntervalKm decimal(18,2) NULL,
-        IntervalDays int NULL,
-        LastServiceKm decimal(18,2) NOT NULL,
+        IntervalKilometers decimal(18,2) NULL,
+        IntervalDays int NULL, -- dias calendario
+        LastServiceOdometerKilometers decimal(18,2) NOT NULL,
         LastServiceDate date NOT NULL,
-        CycleId uniqueidentifier NOT NULL,
-        NoticeRaised bit NOT NULL,
-        CycleCancelled bit NOT NULL,
+        MaintenanceCycleId uniqueidentifier NOT NULL,
+        DueSoonNoticeRaised bit NOT NULL,
+        IsCycleCancelled bit NOT NULL,
         Status nvarchar(20) NOT NULL,
-        CONSTRAINT CK_Routines_Interval CHECK ((IntervalKm IS NOT NULL OR IntervalDays IS NOT NULL) AND (IntervalKm IS NULL OR IntervalKm > 0) AND (IntervalDays IS NULL OR IntervalDays > 0)),
-        CONSTRAINT CK_Routines_Km CHECK (LastServiceKm >= 0),
-        CONSTRAINT CK_Routines_Status CHECK (Status IN ('Current','DueSoon','Overdue'))
+        CONSTRAINT CK_MaintenanceRoutines_Interval CHECK ((IntervalKilometers IS NOT NULL OR IntervalDays IS NOT NULL) AND (IntervalKilometers IS NULL OR IntervalKilometers > 0) AND (IntervalDays IS NULL OR IntervalDays > 0)),
+        CONSTRAINT CK_MaintenanceRoutines_LastServiceOdometerKilometers CHECK (LastServiceOdometerKilometers >= 0),
+        CONSTRAINT CK_MaintenanceRoutines_Status CHECK (Status IN ('Current','DueSoon','Overdue'))
     );
-    CREATE INDEX IX_Routines_VehicleId ON dbo.Routines(VehicleId);
+    CREATE INDEX IX_MaintenanceRoutines_VehicleId ON dbo.MaintenanceRoutines(VehicleId);
 END;
 GO
 
-IF OBJECT_ID('dbo.Orders','U') IS NULL
+IF OBJECT_ID('dbo.ServiceOrders','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.Orders (
-        Id uniqueidentifier NOT NULL CONSTRAINT PK_Orders PRIMARY KEY,
+    CREATE TABLE dbo.ServiceOrders (
+        ServiceOrderId uniqueidentifier NOT NULL CONSTRAINT PK_ServiceOrders PRIMARY KEY,
         Version bigint NOT NULL,
-        VehicleId uniqueidentifier NOT NULL CONSTRAINT FK_Orders_Vehicles REFERENCES dbo.Vehicles(Id),
-        RoutineId uniqueidentifier NOT NULL CONSTRAINT FK_Orders_Routines REFERENCES dbo.Routines(Id),
-        CycleId uniqueidentifier NOT NULL,
-        Workshop nvarchar(120) NOT NULL,
-        State nvarchar(20) NOT NULL,
-        QuoteAmount decimal(18,2) NULL,
-        ActualKm decimal(18,2) NULL,
-        ActualDate date NULL,
+        VehicleId uniqueidentifier NOT NULL CONSTRAINT FK_ServiceOrders_Vehicles REFERENCES dbo.Vehicles(VehicleId),
+        MaintenanceRoutineId uniqueidentifier NOT NULL CONSTRAINT FK_ServiceOrders_MaintenanceRoutines REFERENCES dbo.MaintenanceRoutines(MaintenanceRoutineId),
+        MaintenanceCycleId uniqueidentifier NOT NULL,
+        AssignedWorkshop nvarchar(120) NOT NULL,
+        Status nvarchar(20) NOT NULL,
+        QuoteAmountCop decimal(18,2) NULL,
+        ActualServiceOdometerKilometers decimal(18,2) NULL,
+        ActualServiceDate date NULL,
         CreatedAt datetimeoffset NOT NULL,
-        CONSTRAINT CK_Orders_State CHECK (State IN ('Created','Quoted','Approved','InProgress','Completed','Cancelled')),
-        CONSTRAINT CK_Orders_Amount CHECK (QuoteAmount IS NULL OR QuoteAmount > 0)
+        CONSTRAINT CK_ServiceOrders_Status CHECK (Status IN ('Created','Quoted','Approved','InProgress','Completed','Cancelled')),
+        CONSTRAINT CK_ServiceOrders_QuoteAmountCop CHECK (QuoteAmountCop IS NULL OR QuoteAmountCop > 0)
     );
-    CREATE UNIQUE INDEX UX_Orders_OpenRoutine ON dbo.Orders(VehicleId,RoutineId)
-        WHERE State <> 'Completed' AND State <> 'Cancelled';
+    CREATE UNIQUE INDEX UX_ServiceOrders_OpenRoutine ON dbo.ServiceOrders(VehicleId,MaintenanceRoutineId)
+        WHERE Status <> 'Completed' AND Status <> 'Cancelled';
 END;
 GO
 
-IF OBJECT_ID('dbo.Receipts','U') IS NULL
+IF OBJECT_ID('dbo.IdempotencyRecords','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.Receipts (
+    CREATE TABLE dbo.IdempotencyRecords (
         Scope nvarchar(160) NOT NULL,
-        [Key] nvarchar(100) NOT NULL,
-        Fingerprint varchar(64) NOT NULL,
-        Response nvarchar(max) NOT NULL,
+        IdempotencyKey nvarchar(100) NOT NULL,
+        RequestFingerprint varchar(64) NOT NULL,
+        StoredResponse nvarchar(max) NOT NULL,
         CreatedAt datetimeoffset NOT NULL,
-        CONSTRAINT PK_Receipts PRIMARY KEY (Scope,[Key])
+        CONSTRAINT PK_IdempotencyRecords PRIMARY KEY (Scope,IdempotencyKey)
     );
 END;
 GO
 
-IF OBJECT_ID('dbo.Outbox','U') IS NULL
+IF OBJECT_ID('dbo.OutboxMessages','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.Outbox (
-        Id uniqueidentifier NOT NULL CONSTRAINT PK_Outbox PRIMARY KEY,
-        Type nvarchar(80) NOT NULL,
+    CREATE TABLE dbo.OutboxMessages (
+        OutboxMessageId uniqueidentifier NOT NULL CONSTRAINT PK_OutboxMessages PRIMARY KEY,
+        EventType nvarchar(80) NOT NULL,
         AggregateId uniqueidentifier NOT NULL,
-        CycleId uniqueidentifier NOT NULL,
-        Message nvarchar(500) NOT NULL,
+        MaintenanceCycleId uniqueidentifier NOT NULL,
+        Payload nvarchar(500) NOT NULL,
         OccurredAt datetimeoffset NOT NULL,
         PublishedAt datetimeoffset NULL
     );
-    CREATE UNIQUE INDEX UX_Outbox_NoticeCycle ON dbo.Outbox(Type,AggregateId,CycleId)
-        WHERE Type = 'MaintenanceDueSoon';
-    CREATE INDEX IX_Outbox_Pending ON dbo.Outbox(OccurredAt) WHERE PublishedAt IS NULL;
+    CREATE UNIQUE INDEX UX_OutboxMessages_DueSoonNotice ON dbo.OutboxMessages(EventType,AggregateId,MaintenanceCycleId)
+        WHERE EventType = 'MaintenanceDueSoon';
+    CREATE INDEX IX_OutboxMessages_Pending ON dbo.OutboxMessages(OccurredAt) WHERE PublishedAt IS NULL;
 END;
 GO

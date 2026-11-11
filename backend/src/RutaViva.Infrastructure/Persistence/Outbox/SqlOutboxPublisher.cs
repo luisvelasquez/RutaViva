@@ -3,12 +3,12 @@ using Microsoft.Extensions.Logging;
 using RutaViva.Application.Interfaces.Events;
 using RutaViva.Application.Interfaces.Time;
 using RutaViva.Infrastructure.Persistence.Connections;
-using RutaViva.Infrastructure.Persistence.Rows;
+using RutaViva.Infrastructure.Persistence.Models;
 
 namespace RutaViva.Infrastructure.Persistence.Outbox;
 
 /// <summary>
-/// Lectura/marcado de Outbox fuera del worker de API. Reentrega al publicar ≠ aviso único por ciclo.
+/// Publishes pending outbox messages. At-least-once redelivery is distinct from the unique due-soon notice.
 /// </summary>
 public sealed class SqlOutboxPublisher(
     SqlConnectionFactory factory,
@@ -18,24 +18,24 @@ public sealed class SqlOutboxPublisher(
     public async Task<int> PublishPendingAsync(int take, CancellationToken cancellationToken)
     {
         await using var db = factory.Create();
-        var batch = (await db.QueryAsync<OutboxMessageRow>(new CommandDefinition(
+        var pendingMessages = (await db.QueryAsync<OutboxMessagePersistenceModel>(new CommandDefinition(
             SqlQueryCatalog.Get(SqlQueryCatalog.Outbox.GetPending),
             new { take },
             cancellationToken: cancellationToken))).ToList();
 
-        foreach (var message in batch)
+        foreach (var outboxMessage in pendingMessages)
         {
             logger.LogInformation(
                 "Evento {EventId}: {Type} {Message}",
-                message.Id,
-                message.Type,
-                message.Message);
+                outboxMessage.OutboxMessageId,
+                outboxMessage.EventType,
+                outboxMessage.Payload);
             await db.ExecuteAsync(new CommandDefinition(
                 SqlQueryCatalog.Get(SqlQueryCatalog.Outbox.MarkPublished),
-                new { now = clock.UtcNow, message.Id },
+                new { now = clock.UtcNow, Id = outboxMessage.OutboxMessageId },
                 cancellationToken: cancellationToken));
         }
 
-        return batch.Count;
+        return pendingMessages.Count;
     }
 }

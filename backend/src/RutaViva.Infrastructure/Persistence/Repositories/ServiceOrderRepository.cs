@@ -3,7 +3,7 @@ using Microsoft.Data.SqlClient;
 using RutaViva.Application.Interfaces.Persistence;
 using RutaViva.Domain;
 using RutaViva.Domain.Aggregates.ServiceOrders;
-using RutaViva.Infrastructure.Persistence.Rows;
+using RutaViva.Infrastructure.Persistence.Models;
 using RutaViva.Infrastructure.Persistence.Transactions;
 
 namespace RutaViva.Infrastructure.Persistence.Repositories;
@@ -13,11 +13,11 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork)
 {
     public async Task<ServiceOrder> FindServiceOrderByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<ServiceOrderRow>(
+        var orderData = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<ServiceOrderPersistenceModel>(
             Command(SqlQueryCatalog.Get(SqlQueryCatalog.ServiceOrders.GetById), new { id }, cancellationToken));
-        if (row is null)
+        if (orderData is null)
             throw new MissingException("Orden no encontrada.");
-        return Map(row);
+        return Map(orderData);
     }
 
     public async Task<bool> HasOpenOrderForRoutineAsync(
@@ -41,7 +41,7 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork)
                 Params(order, null),
                 cancellationToken));
         }
-        catch (SqlException ex) when (SqlUniqueness.IsViolation(ex, "UX_Orders_OpenRoutine"))
+        catch (SqlException ex) when (SqlUniqueness.IsViolation(ex, "UX_ServiceOrders_OpenRoutine"))
         {
             throw new ConflictException("Ya existe una orden abierta para este vehículo y rutina.");
         }
@@ -76,8 +76,17 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork)
         ExpectedVersion = expectedVersion
     };
 
-    private static ServiceOrder Map(ServiceOrderRow row) =>
+    private static ServiceOrder Map(ServiceOrderPersistenceModel orderData) =>
         ServiceOrder.Reconstitute(
-            row.Id, row.Version, row.VehicleId, row.RoutineId, row.CycleId, row.Workshop,
-            Enum.Parse<OrderState>(row.State), row.QuoteAmount, row.ActualKm, row.ActualDate, row.CreatedAt);
+            orderData.ServiceOrderId,
+            orderData.Version,
+            orderData.VehicleId,
+            orderData.MaintenanceRoutineId,
+            orderData.MaintenanceCycleId,
+            orderData.AssignedWorkshop,
+            Enum.Parse<OrderState>(orderData.Status),
+            orderData.QuoteAmountCop,
+            orderData.ActualServiceOdometerKilometers,
+            orderData.ActualServiceDate,
+            orderData.CreatedAt);
 }
