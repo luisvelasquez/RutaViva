@@ -1,4 +1,4 @@
-using RutaViva.Application.Abstractions.Time;
+using RutaViva.Application.Interfaces.Time;
 
 namespace RutaViva.Infrastructure.Time;
 

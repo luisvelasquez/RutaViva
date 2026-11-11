@@ -1,10 +1,9 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RutaViva.Api.Configuration;
-using RutaViva.Api.Contracts.Vehicles;
-using RutaViva.Application.Vehicles.Commands.CreateVehicle;
-using RutaViva.Application.Vehicles.Commands.RegisterOdometerReading;
-using RutaViva.Application.Vehicles.Models;
+using RutaViva.Api.Requests.Vehicles;
+using RutaViva.Application.Vehicles.Commands;
+using RutaViva.Application.Vehicles.Dtos;
 
 namespace RutaViva.Api.Controllers;
 
@@ -13,7 +12,7 @@ namespace RutaViva.Api.Controllers;
 [Tags("Vehicles")]
 public sealed class VehiclesController(IMediator mediator) : ControllerBase
 {
-    /// <summary>Registra un vehÃ­culo con taller asignado y odÃ³metro inicial.</summary>
+    /// <summary>Registra un vehículo con taller asignado y odómetro inicial.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(VehicleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -21,18 +20,14 @@ public sealed class VehiclesController(IMediator mediator) : ControllerBase
     public Task<VehicleDto> CreateVehicle(
         [FromBody] CreateVehicleRequest request,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
-        CancellationToken cancellationToken)
-    {
-        _ = idempotencyKey;
-        var command = new CreateVehicleCommand(
+        CancellationToken cancellationToken) =>
+        mediator.Send(new CreateVehicleCommand(
             request.Plate,
             request.Workshop,
             request.Odometer,
-            IdempotencyHttp.Create(Request, request));
-        return mediator.Send(command, cancellationToken);
-    }
+            IdempotencyHttp.Create(Request, idempotencyKey, request)), cancellationToken);
 
-    /// <summary>Registra una lectura de odÃ³metro y evalÃºa rutinas por kilÃ³metros.</summary>
+    /// <summary>Registra una lectura de odómetro y evalúa rutinas por kilómetros.</summary>
     [HttpPost("{id:guid}/readings")]
     [ProducesResponseType(typeof(RegisterOdometerReadingResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -41,13 +36,9 @@ public sealed class VehiclesController(IMediator mediator) : ControllerBase
         Guid id,
         [FromBody] RegisterOdometerReadingRequest request,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
-        CancellationToken cancellationToken)
-    {
-        _ = idempotencyKey;
-        var command = new RegisterOdometerReadingCommand(
+        CancellationToken cancellationToken) =>
+        mediator.Send(new RegisterOdometerReadingCommand(
             id,
             request.Kilometres,
-            IdempotencyHttp.Create(Request, request, $"vehicle:{id:N}"));
-        return mediator.Send(command, cancellationToken);
-    }
+            IdempotencyHttp.Create(Request, idempotencyKey, request, $"vehicle:{id:N}")), cancellationToken);
 }

@@ -3,10 +3,6 @@ using RutaViva.Domain.ValueObjects;
 
 namespace RutaViva.Domain.Aggregates.ServiceOrders;
 
-/// <summary>
-/// Raíz de agregado Orden de servicio.
-/// Protege cotización, aprobación, rechazo, cancelación, inicio y finalización.
-/// </summary>
 public sealed class ServiceOrder : AggregateRoot
 {
     public Guid VehicleId { get; private set; }
@@ -15,7 +11,7 @@ public sealed class ServiceOrder : AggregateRoot
     public string Workshop { get; private set; } = "";
     public OrderState State { get; private set; }
     public MoneyCop? QuotedAmount { get; private set; }
-    public Kilometrage? ActualKm { get; private set; }
+    public Kilometres? ActualKm { get; private set; }
     public DateOnly? ActualDate { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -40,11 +36,13 @@ public sealed class ServiceOrder : AggregateRoot
             throw new BusinessException($"La acción requiere estado {expected}; estado actual: {State}.");
     }
 
+    public const decimal AutomaticApprovalCeilingCop = 1_500_000m;
+
     public void Quote(MoneyCop money)
     {
         RequireState(OrderState.Created);
         QuotedAmount = money;
-        State = money.QualifiesForAutomaticApproval ? OrderState.Approved : OrderState.Quoted;
+        State = money.Amount <= AutomaticApprovalCeilingCop ? OrderState.Approved : OrderState.Quoted;
         MarkChanged();
     }
 
@@ -77,17 +75,13 @@ public sealed class ServiceOrder : AggregateRoot
         MarkChanged();
     }
 
-    public void CompleteService(Kilometrage km, DateOnly date)
+    public void CompleteService(Kilometres km, DateOnly date)
     {
         RequireState(OrderState.InProgress);
         ActualKm = km;
         ActualDate = date;
         State = OrderState.Completed;
-        Raise(new DomainEvent(
-            DomainEventTypes.ServiceCompleted,
-            Id,
-            CycleId,
-            "Servicio completado y rutina reiniciada."));
+        Raise(DomainEventFactory.ServiceCompleted(Id, CycleId));
     }
 
     public static ServiceOrder Reconstitute(
@@ -112,7 +106,7 @@ public sealed class ServiceOrder : AggregateRoot
             Workshop = workshop,
             State = state,
             QuotedAmount = quoteAmount is decimal amount ? new MoneyCop(amount) : null,
-            ActualKm = actualKm is decimal km ? new Kilometrage(km) : null,
+            ActualKm = actualKm is decimal km ? new Kilometres(km) : null,
             ActualDate = actualDate,
             CreatedAt = createdAt
         };

@@ -29,10 +29,11 @@ public sealed class OutboxWriter(SqlUnitOfWork unitOfWork) : SqlRepositoryBase(u
                 },
                 cancellationToken));
         }
-        catch (SqlException ex) when (ex.Number is 2601 or 2627
-            && domainEvent.Type == DomainEventTypes.MaintenanceDueSoon)
+        catch (SqlException ex) when (
+            domainEvent.Type == DomainEventTypes.MaintenanceDueSoon
+            && SqlUniqueness.IsViolation(ex, "UX_Outbox_NoticeCycle"))
         {
-            // Un aviso por ciclo: el índice único filtrado absorbe la carrera.
+            // Aviso único por ciclo: el índice filtrado absorbe la carrera de inserción.
         }
     }
 }

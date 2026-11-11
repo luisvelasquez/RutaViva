@@ -12,7 +12,7 @@ public sealed class MaintenanceRoutineRepository(SqlUnitOfWork unitOfWork)
 {
     public async Task<MaintenanceRoutine> FindRoutineByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<RoutineRow>(
+        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<MaintenanceRoutineRow>(
             Command(SqlQueryCatalog.Get(SqlQueryCatalog.MaintenanceRoutines.GetById), new { id }, cancellationToken));
         if (row is null)
             throw new MissingException("Rutina no encontrada.");
@@ -23,7 +23,7 @@ public sealed class MaintenanceRoutineRepository(SqlUnitOfWork unitOfWork)
         Guid vehicleId,
         CancellationToken cancellationToken)
     {
-        var rows = await UnitOfWork.Connection.QueryAsync<RoutineRow>(
+        var rows = await UnitOfWork.Connection.QueryAsync<MaintenanceRoutineRow>(
             Command(SqlQueryCatalog.Get(SqlQueryCatalog.MaintenanceRoutines.GetByVehicle), new { vehicleId }, cancellationToken));
         return rows.Select(Map).ToList();
     }
@@ -53,7 +53,7 @@ public sealed class MaintenanceRoutineRepository(SqlUnitOfWork unitOfWork)
         routine.Version,
         routine.VehicleId,
         routine.Name,
-        IntervalKm = routine.Interval.Kilometres?.Value,
+        IntervalKm = routine.Interval.IntervalKilometres?.Value,
         IntervalDays = routine.Interval.Days,
         LastServiceKm = routine.LastServiceKm.Value,
         routine.LastServiceDate,
@@ -64,7 +64,7 @@ public sealed class MaintenanceRoutineRepository(SqlUnitOfWork unitOfWork)
         ExpectedVersion = expectedVersion
     };
 
-    private static MaintenanceRoutine Map(RoutineRow row) =>
+    private static MaintenanceRoutine Map(MaintenanceRoutineRow row) =>
         MaintenanceRoutine.Reconstitute(
             row.Id, row.Version, row.VehicleId, row.Name, row.IntervalKm, row.IntervalDays,
             row.LastServiceKm, row.LastServiceDate, row.CycleId, row.NoticeRaised, row.CycleCancelled,

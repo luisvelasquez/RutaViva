@@ -3,16 +3,12 @@ using RutaViva.Domain.ValueObjects;
 
 namespace RutaViva.Domain.Aggregates.MaintenanceRoutines;
 
-/// <summary>
-/// Raíz de agregado Rutina de mantenimiento.
-/// Protege intervalos, estado de vencimiento, aviso único por ciclo y reinicio.
-/// </summary>
 public sealed class MaintenanceRoutine : AggregateRoot
 {
     public Guid VehicleId { get; private set; }
     public string Name { get; private set; } = "";
     public MaintenanceInterval Interval { get; private set; } = null!;
-    public Kilometrage LastServiceKm { get; private set; }
+    public Kilometres LastServiceKm { get; private set; }
     public DateOnly LastServiceDate { get; private set; }
     public Guid CycleId { get; private set; }
     public bool NoticeRaised { get; private set; }
@@ -25,7 +21,7 @@ public sealed class MaintenanceRoutine : AggregateRoot
         Guid vehicleId,
         string name,
         MaintenanceInterval interval,
-        Kilometrage baseline,
+        Kilometres baseline,
         DateOnly date)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 100)
@@ -41,7 +37,7 @@ public sealed class MaintenanceRoutine : AggregateRoot
         Status = MaintenanceStatus.Current;
     }
 
-    public void EvaluateDueStatus(Kilometrage odometer, DateOnly today)
+    public void EvaluateDueStatus(Kilometres odometer, DateOnly today)
     {
         if (CycleCancelled)
             return;
@@ -61,14 +57,10 @@ public sealed class MaintenanceRoutine : AggregateRoot
             return;
 
         NoticeRaised = true;
-        Raise(new DomainEvent(
-            DomainEventTypes.MaintenanceDueSoon,
-            Id,
-            CycleId,
-            $"{Name}: mantenimiento por vencer."));
+        Raise(DomainEventFactory.MaintenanceDueSoon(Id, CycleId, Name));
     }
 
-    private MaintenanceStatus ResolveStatus(Kilometrage travelled, int elapsedDays)
+    private MaintenanceStatus ResolveStatus(Kilometres travelled, int elapsedDays)
     {
         if (Interval.IsOverdue(travelled, elapsedDays))
             return MaintenanceStatus.Overdue;
@@ -83,7 +75,7 @@ public sealed class MaintenanceRoutine : AggregateRoot
         MarkChanged();
     }
 
-    public void ResetMaintenanceCycle(Kilometrage serviceKm, DateOnly serviceDate, DateOnly today)
+    public void ResetMaintenanceCycle(Kilometres serviceKm, DateOnly serviceDate, DateOnly today)
     {
         if (serviceKm.Value < LastServiceKm.Value || serviceDate < LastServiceDate || serviceDate > today)
             throw new BusinessException("El servicio no puede preceder al anterior ni tener fecha futura.");
@@ -117,7 +109,7 @@ public sealed class MaintenanceRoutine : AggregateRoot
             VehicleId = vehicleId,
             Name = name,
             Interval = new MaintenanceInterval(intervalKm, intervalDays),
-            LastServiceKm = new Kilometrage(lastServiceKm),
+            LastServiceKm = new Kilometres(lastServiceKm),
             LastServiceDate = lastServiceDate,
             CycleId = cycleId,
             NoticeRaised = noticeRaised,

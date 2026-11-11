@@ -1,4 +1,5 @@
-using RutaViva.Api;
+using Microsoft.OpenApi;
+using RutaViva.Api.Workers;
 using RutaViva.Application;
 using RutaViva.Infrastructure;
 
@@ -10,7 +11,8 @@ public static class DependencyInjection
     {
         services.AddControllers();
         services.AddProblemDetails();
-        services.AddHostedService<MaintenanceWorker>();
+        services.AddHostedService<DailyMaintenanceWorker>();
+        services.AddHostedService<OutboxPublisherWorker>();
         services.AddCors(o => o.AddDefaultPolicy(p =>
             p.WithOrigins("http://localhost:4200", "http://localhost:8080")
                 .AllowAnyHeader()
@@ -24,8 +26,33 @@ public static class DependencyInjection
                 {
                     Title = "RutaViva API",
                     Version = "v1",
-                    Description = "API de mantenimiento preventivo de flotas (reto RutaViva)."
+                    Description = "API de mantenimiento preventivo de flotas (reto RutaViva). Los POST de escritura exigen la cabecera Idempotency-Key."
                 };
+                return Task.CompletedTask;
+            });
+            options.AddOperationTransformer((operation, _, _) =>
+            {
+                if (operation.Parameters is null)
+                    return Task.CompletedTask;
+
+                for (var i = 0; i < operation.Parameters.Count; i++)
+                {
+                    var parameter = operation.Parameters[i];
+                    if (!string.Equals(parameter.Name, "Idempotency-Key", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    // IOpenApiParameter.Required es de solo lectura: sustituir el parámetro.
+                    operation.Parameters[i] = new OpenApiParameter
+                    {
+                        Name = parameter.Name,
+                        In = parameter.In,
+                        Required = true,
+                        Schema = parameter.Schema,
+                        Description = parameter.Description
+                            ?? "Obligatoria. Misma clave + mismos datos = replay; misma clave + datos distintos = 409."
+                    };
+                }
+
                 return Task.CompletedTask;
             });
         });

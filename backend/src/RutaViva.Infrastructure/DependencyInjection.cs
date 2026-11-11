@@ -4,10 +4,11 @@ using RutaViva.Application.Interfaces.Concurrency;
 using RutaViva.Application.Interfaces.Events;
 using RutaViva.Application.Interfaces.Idempotency;
 using RutaViva.Application.Interfaces.Persistence;
-using RutaViva.Application.Abstractions.Time;
+using RutaViva.Application.Interfaces.Time;
 using RutaViva.Infrastructure.Persistence.Concurrency;
 using RutaViva.Infrastructure.Persistence.Connections;
 using RutaViva.Infrastructure.Persistence.Idempotency;
+using RutaViva.Infrastructure.Persistence.Outbox;
 using RutaViva.Infrastructure.Persistence.Repositories;
 using RutaViva.Infrastructure.Persistence.Transactions;
 using RutaViva.Infrastructure.Time;
@@ -30,10 +31,11 @@ public static class DependencyInjection
         services.AddScoped<IMaintenanceRoutineRepository, MaintenanceRoutineRepository>();
         services.AddScoped<IServiceOrderRepository, ServiceOrderRepository>();
         services.AddScoped<IOutboxWriter, OutboxWriter>();
+        services.AddSingleton<IOutboxPublisher, SqlOutboxPublisher>();
         services.AddScoped<IIdempotencyStore, IdempotencyStore>();
         services.AddScoped<IApplicationLock, ApplicationLock>();
         services.AddScoped<IIdempotentExecutor, IdempotentExecutor>();
-        services.AddScoped<IMaintenanceDashboardReadStore, MaintenanceDashboardReadStore>();
+        services.AddScoped<IMaintenanceOverviewReader, MaintenanceOverviewReader>();
 
         return services;
     }

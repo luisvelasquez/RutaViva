@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using RutaViva.Application.MaintenanceRoutines.Coordination;
-using RutaViva.Application.Messaging;
+using RutaViva.Application.Messaging.Behaviors;
 
 namespace RutaViva.Application;
 

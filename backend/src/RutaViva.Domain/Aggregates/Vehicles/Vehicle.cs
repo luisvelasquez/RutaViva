@@ -10,11 +10,11 @@ public sealed class Vehicle : AggregateRoot
 {
     public string Plate { get; private set; } = "";
     public string Workshop { get; private set; } = "";
-    public Kilometrage Odometer { get; private set; }
+    public Kilometres Odometer { get; private set; }
 
     private Vehicle() { }
 
-    public Vehicle(string plate, string workshop, Kilometrage odometer)
+    public Vehicle(string plate, string workshop, Kilometres odometer)
     {
         if (string.IsNullOrWhiteSpace(plate) || string.IsNullOrWhiteSpace(workshop))
             throw new BusinessException("Placa y taller son obligatorios.");
@@ -31,7 +31,7 @@ public sealed class Vehicle : AggregateRoot
     }
 
     /// <summary>Ignora menor o igual sin error; solo avanza el odómetro.</summary>
-    public bool RegisterOdometerReading(Kilometrage reading)
+    public bool RegisterOdometerReading(Kilometres reading)
     {
         if (reading.IsLessOrEqual(Odometer))
             return false;
@@ -53,6 +53,6 @@ public sealed class Vehicle : AggregateRoot
             Version = version,
             Plate = plate,
             Workshop = workshop,
-            Odometer = new Kilometrage(odometer)
+            Odometer = new Kilometres(odometer)
         };
 }

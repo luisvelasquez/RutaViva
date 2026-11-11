@@ -13,7 +13,7 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork)
 {
     public async Task<ServiceOrder> FindServiceOrderByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<OrderRow>(
+        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<ServiceOrderRow>(
             Command(SqlQueryCatalog.Get(SqlQueryCatalog.ServiceOrders.GetById), new { id }, cancellationToken));
         if (row is null)
             throw new MissingException("Orden no encontrada.");
@@ -41,7 +41,7 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork)
                 Params(order, null),
                 cancellationToken));
         }
-        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        catch (SqlException ex) when (SqlUniqueness.IsViolation(ex, "UX_Orders_OpenRoutine"))
         {
             throw new ConflictException("Ya existe una orden abierta para este vehículo y rutina.");
         }
@@ -76,7 +76,7 @@ public sealed class ServiceOrderRepository(SqlUnitOfWork unitOfWork)
         ExpectedVersion = expectedVersion
     };
 
-    private static ServiceOrder Map(OrderRow row) =>
+    private static ServiceOrder Map(ServiceOrderRow row) =>
         ServiceOrder.Reconstitute(
             row.Id, row.Version, row.VehicleId, row.RoutineId, row.CycleId, row.Workshop,
             Enum.Parse<OrderState>(row.State), row.QuoteAmount, row.ActualKm, row.ActualDate, row.CreatedAt);

@@ -14,7 +14,7 @@ public sealed class IdempotencyStore(SqlUnitOfWork unitOfWork)
         string key,
         CancellationToken cancellationToken)
     {
-        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<ReceiptRow>(Command(
+        var row = await UnitOfWork.Connection.QuerySingleOrDefaultAsync<IdempotencyReceiptRow>(Command(
             SqlQueryCatalog.Get(SqlQueryCatalog.Idempotency.GetReceipt),
             new { scope, key },
             cancellationToken));

@@ -1,8 +1,8 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RutaViva.Api.Configuration;
-using RutaViva.Api.Contracts.MaintenanceRoutines;
-using RutaViva.Application.MaintenanceRoutines.Commands.CreateMaintenanceRoutine;
+using RutaViva.Api.Requests.MaintenanceRoutines;
+using RutaViva.Application.MaintenanceRoutines.Commands;
 
 namespace RutaViva.Api.Controllers;
 
@@ -20,17 +20,13 @@ public sealed class MaintenanceRoutinesController(IMediator mediator) : Controll
         Guid vehicleId,
         [FromBody] CreateMaintenanceRoutineRequest request,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
-        CancellationToken cancellationToken)
-    {
-        _ = idempotencyKey;
-        var command = new CreateMaintenanceRoutineCommand(
+        CancellationToken cancellationToken) =>
+        mediator.Send(new CreateMaintenanceRoutineCommand(
             vehicleId,
             request.Name,
             request.IntervalKm,
             request.IntervalDays,
             request.LastServiceKm,
             request.LastServiceDate,
-            IdempotencyHttp.Create(Request, request, $"vehicle:{vehicleId:N}"));
-        return mediator.Send(command, cancellationToken);
-    }
+            IdempotencyHttp.Create(Request, idempotencyKey, request, $"vehicle:{vehicleId:N}")), cancellationToken);
 }

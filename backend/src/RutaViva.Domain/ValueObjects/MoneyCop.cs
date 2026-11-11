@@ -1,10 +1,12 @@
 namespace RutaViva.Domain.ValueObjects;
 
-/// <summary>Dinero en COP. Importe positivo con hasta dos decimales.</summary>
-public readonly record struct MoneyCop
+/// <summary>
+/// Importe en COP. Comparación por valor. No admite default inválido: es clase (null o instancia válida).
+/// El techo de autoaprobación no vive aquí: es regla de la orden de servicio.
+/// </summary>
+public sealed class MoneyCop : IEquatable<MoneyCop>
 {
     public const string CurrencyCode = "COP";
-    public static readonly MoneyCop AutoApprovalCeiling = new(1_500_000m);
 
     public decimal Amount { get; }
     public string Currency => CurrencyCode;
@@ -16,6 +18,8 @@ public readonly record struct MoneyCop
         Amount = amount;
     }
 
-    public bool QualifiesForAutomaticApproval => Amount <= AutoApprovalCeiling.Amount;
+    public bool Equals(MoneyCop? other) => other is not null && Amount == other.Amount;
+    public override bool Equals(object? obj) => obj is MoneyCop other && Equals(other);
+    public override int GetHashCode() => Amount.GetHashCode();
     public override string ToString() => $"{Amount:0.##} {CurrencyCode}";
 }

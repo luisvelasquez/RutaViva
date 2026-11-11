@@ -1,4 +1,4 @@
-namespace RutaViva.Application.Abstractions.Time;
+namespace RutaViva.Application.Interfaces.Time;
 
 public interface IClock
 {

@@ -1,10 +1,5 @@
 namespace RutaViva.Domain.Aggregates;
 
-/// <summary>
-/// Clase base abstracta de las raíces de agregado.
-/// Comparte identidad, control de versión optimista y recolección de eventos de dominio.
-/// Las raíces concretas son Vehicle, MaintenanceRoutine y ServiceOrder.
-/// </summary>
 public abstract class AggregateRoot
 {
     private readonly List<Domain.Events.DomainEvent> _domainEvents = [];

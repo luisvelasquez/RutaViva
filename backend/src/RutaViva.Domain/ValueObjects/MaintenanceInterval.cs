@@ -3,7 +3,7 @@ namespace RutaViva.Domain.ValueObjects;
 /// <summary>Intervalo por kilómetros, días o ambos. Con ambos, vence el primero que se cumpla.</summary>
 public sealed record MaintenanceInterval
 {
-    public Kilometrage? Kilometres { get; }
+    public Kilometres? IntervalKilometres { get; }
     public int? Days { get; }
 
     public MaintenanceInterval(decimal? kilometres, int? days)
@@ -13,17 +13,17 @@ public sealed record MaintenanceInterval
         if (kilometres is <= 0 || days is <= 0)
             throw new BusinessException("Configure kilómetros, días o ambos, mayores a cero.");
 
-        Kilometres = kilometres is decimal km ? new Kilometrage(km) : null;
+        IntervalKilometres = kilometres is decimal km ? new Kilometres(km) : null;
         Days = days;
     }
 
-    public bool IsOverdue(Kilometrage travelled, int elapsedDays) =>
-        (Kilometres is Kilometrage limitKm && travelled.Value >= limitKm.Value)
+    public bool IsOverdue(Kilometres travelled, int elapsedDays) =>
+        (IntervalKilometres is { } limitKm && travelled.Value >= limitKm.Value)
         || (Days is int limitDays && elapsedDays >= limitDays);
 
-    public bool IsDueSoon(Kilometrage travelled, int elapsedDays)
+    public bool IsDueSoon(Kilometres travelled, int elapsedDays)
     {
-        var kmThreshold = Kilometres is Kilometrage km && travelled.Value >= km.Value * 0.9m;
+        var kmThreshold = IntervalKilometres is { } km && travelled.Value >= km.Value * 0.9m;
         var dayThreshold = Days is int d && elapsedDays >= d * 0.9m;
         return kmThreshold || dayThreshold;
     }

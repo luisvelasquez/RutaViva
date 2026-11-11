@@ -48,7 +48,6 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
             return "El aviso de este ciclo ya fue registrado.";
         if (text.Contains("PK_Receipts", StringComparison.OrdinalIgnoreCase))
             return "La clave de idempotencia ya está registrada.";
-        // No inventar un mensaje de negocio específico para índices desconocidos.
         return "Conflicto de unicidad en los datos persistidos.";
     }
 }

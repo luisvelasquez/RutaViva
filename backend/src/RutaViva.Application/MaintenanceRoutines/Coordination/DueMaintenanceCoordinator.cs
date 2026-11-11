@@ -1,6 +1,6 @@
 using RutaViva.Application.Interfaces.Events;
 using RutaViva.Application.Interfaces.Persistence;
-using RutaViva.Application.Abstractions.Time;
+using RutaViva.Application.Interfaces.Time;
 using RutaViva.Domain;
 using RutaViva.Domain.Aggregates.MaintenanceRoutines;
 using RutaViva.Domain.Aggregates.ServiceOrders;
@@ -39,11 +39,7 @@ public sealed class DueMaintenanceCoordinator(
         }
 
         await outbox.AppendAsync(
-            new DomainEvent(
-                DomainEventTypes.ServiceOrderCreated,
-                order.Id,
-                routine.CycleId,
-                $"Orden creada para {routine.Name}, vehículo {vehicle.Plate}."),
+            DomainEventFactory.ServiceOrderCreated(order.Id, routine.CycleId, routine.Name, vehicle.Plate),
             clock.UtcNow,
             cancellationToken);
     }

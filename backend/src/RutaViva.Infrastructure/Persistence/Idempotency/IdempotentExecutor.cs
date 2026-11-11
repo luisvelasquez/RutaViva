@@ -1,14 +1,16 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using RutaViva.Application.Interfaces.Concurrency;
 using RutaViva.Application.Interfaces.Idempotency;
 using RutaViva.Application.Interfaces.Persistence;
-using RutaViva.Application.Abstractions.Time;
+using RutaViva.Application.Interfaces.Time;
 using RutaViva.Domain;
 
 namespace RutaViva.Infrastructure.Persistence.Idempotency;
 
 /// <summary>
-/// Idempotencia durable (recibo + huella) distinta de la concurrencia de negocio (locks + Version + índices).
+/// Idempotencia durable (recibo + huella). Serializa con escapado relajado para que
+/// el replay reproduzca el mismo JSON que la primera respuesta (p. ej. +00:00).
 /// </summary>
 public sealed class IdempotentExecutor(
     IUnitOfWork unitOfWork,
@@ -16,7 +18,10 @@ public sealed class IdempotentExecutor(
     IApplicationLock applicationLock,
     IClock clock) : IIdempotentExecutor
 {
-    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Web)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     public async Task<T> ExecuteAsync<T>(
         string scope,

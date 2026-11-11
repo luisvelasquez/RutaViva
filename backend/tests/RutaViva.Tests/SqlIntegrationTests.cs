@@ -1,15 +1,9 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Dapper;
 using Microsoft.Data.SqlClient;
-using RutaViva.Application.Abstractions.Time;
-using RutaViva.Application.MaintenanceRoutines.Commands.EvaluateDueMaintenance;
+using RutaViva.Application.Interfaces.Time;
 using RutaViva.Application.MaintenanceRoutines.Coordination;
-using RutaViva.Application.Messaging;
-using RutaViva.Application.ServiceOrders.Commands.CancelServiceOrder;
-using RutaViva.Application.ServiceOrders.Commands.CompleteServiceOrder;
-using RutaViva.Application.ServiceOrders.Commands.QuoteServiceOrder;
-using RutaViva.Application.ServiceOrders.Commands.StartServiceOrder;
-using RutaViva.Application.Vehicles.Commands.RegisterOdometerReading;
 using RutaViva.Domain;
 using RutaViva.Domain.Aggregates.MaintenanceRoutines;
 using RutaViva.Domain.Aggregates.Vehicles;
@@ -21,6 +15,13 @@ using RutaViva.Infrastructure.Persistence.Repositories;
 using RutaViva.Infrastructure.Persistence.Transactions;
 using RutaViva.Tests.Support;
 using Xunit;
+using RutaViva.Application.Messaging.Idempotency;
+using RutaViva.Application.ServiceOrders.Commands;
+using RutaViva.Application.ServiceOrders.Handlers;
+using RutaViva.Application.MaintenanceRoutines.Commands;
+using RutaViva.Application.MaintenanceRoutines.Handlers;
+using RutaViva.Application.Vehicles.Commands;
+using RutaViva.Application.Vehicles.Handlers;
 
 namespace RutaViva.Tests;
 
@@ -41,6 +42,11 @@ public sealed class FixedClock : IClock
 
 public sealed class SqlIntegrationTests : IAsyncLifetime
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Web)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     private readonly FixedClock clock = new();
     private string connection = "";
 
@@ -94,12 +100,12 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
             var idempotency = new IdempotencyStore(UnitOfWork);
             var locks = new ApplicationLock(UnitOfWork);
             var coordinator = new DueMaintenanceCoordinator(orders, outbox, clock);
-            RegisterReading = new RegisterOdometerReadingCommandHandler(Vehicles, Routines, coordinator);
+            RegisterReading = new RegisterOdometerReadingCommandHandler(Vehicles, Routines, coordinator, locks);
             Evaluate = new EvaluateDueMaintenanceCommandHandler(Vehicles, Routines, coordinator, locks, clock);
             Quote = new QuoteServiceOrderCommandHandler(orders, outbox, clock);
             Start = new StartServiceOrderCommandHandler(orders, outbox, clock);
             Cancel = new CancelServiceOrderCommandHandler(orders, Routines, outbox, clock);
-            Complete = new CompleteServiceOrderCommandHandler(orders, Routines, Vehicles, coordinator, outbox, clock);
+            Complete = new CompleteServiceOrderCommandHandler(orders, Routines, Vehicles, coordinator, outbox, locks, clock);
             Executor = new IdempotentExecutor(UnitOfWork, idempotency, locks, clock);
         }
 
@@ -116,7 +122,7 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         Guid routineId = default;
         await scope.Executor.ExecuteAsync("seed", "one", "v1", [], async ct =>
         {
-            var v = new Vehicle("TEST01", "Taller", new Kilometrage(current));
+            var v = new Vehicle("TEST01", "Taller", new Kilometres(current));
             var r = new MaintenanceRoutine(v.Id, "Aceite", new(100, null), new(0), clock.Today);
             await scope.Vehicles.InsertVehicleAsync(v, ct);
             await scope.Routines.InsertRoutineAsync(r, ct);
@@ -137,7 +143,8 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
             [],
             async ct => await action(scope, ct),
             CancellationToken.None);
-        return JsonSerializer.Serialize(result, JsonSerializerOptions.Web);
+        // Misma política que IdempotentExecutor: el replay debe comparar bytes idénticos.
+        return JsonSerializer.Serialize(result, JsonOptions);
     }
 
     [SqlFact]
@@ -278,16 +285,59 @@ public sealed class SqlIntegrationTests : IAsyncLifetime
         await Command("start", async (s, ct) => await s.Start.Handle(
             new StartServiceOrderCommand(id, 2, Ctx("test", "start", "same")), ct));
 
+        await using var before = Db();
+        var cycleBeforeComplete = await before.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines");
+
         var first = await Command("complete", async (s, ct) => await s.Complete.Handle(
             new CompleteServiceOrderCommand(id, 3, 110, clock.Today, Ctx("test", "complete", "same")), ct));
+
+        await using var mid = Db();
+        var cycleAfterComplete = await mid.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines");
+        Assert.NotEqual(cycleBeforeComplete, cycleAfterComplete);
+
         var replay = await Command("complete", async (s, ct) => await s.Complete.Handle(
             new CompleteServiceOrderCommand(id, 3, 110, clock.Today, Ctx("test", "complete", "same")), ct));
+
+        // Contrato: replay reproduce bytes JSON (UnsafeRelaxedJsonEscaping) y no vuelve a reiniciar.
         Assert.Equal(first, replay);
+        var firstDto = JsonSerializer.Deserialize<JsonElement>(first);
+        var replayDto = JsonSerializer.Deserialize<JsonElement>(replay);
+        Assert.Equal(firstDto.GetProperty("id").GetGuid(), replayDto.GetProperty("id").GetGuid());
+        Assert.Equal(firstDto.GetProperty("state").GetString(), replayDto.GetProperty("state").GetString());
+        Assert.Equal(firstDto.GetProperty("version").GetInt64(), replayDto.GetProperty("version").GetInt64());
 
         await using var db = Db();
+        Assert.Equal(cycleAfterComplete, await db.ExecuteScalarAsync<Guid>("SELECT CycleId FROM dbo.Routines"));
         Assert.Equal(110, await db.ExecuteScalarAsync<decimal>("SELECT LastServiceKm FROM dbo.Routines"));
         Assert.Equal("Current", await db.ExecuteScalarAsync<string>("SELECT Status FROM dbo.Routines"));
         Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Outbox WHERE Type='ServiceCompleted'"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM dbo.Receipts WHERE [Key]='complete'"));
+    }
+
+    [SqlFact]
+    public async Task Concurrent_complete_and_reading_serialize_on_vehicle_lock()
+    {
+        await Seed(100);
+        await Command("daily", async (s, ct) => await s.Evaluate.Handle(
+            new EvaluateDueMaintenanceCommand(Ctx("test", "daily", "same")), ct));
+        await using var query = Db();
+        var id = await query.ExecuteScalarAsync<Guid>("SELECT Id FROM dbo.Orders");
+        var vehicleId = await query.ExecuteScalarAsync<Guid>("SELECT VehicleId FROM dbo.Orders");
+        await Command("quote", async (s, ct) => await s.Quote.Handle(
+            new QuoteServiceOrderCommand(id, 1, 100, Ctx("test", "quote", "same")), ct));
+        await Command("start", async (s, ct) => await s.Start.Handle(
+            new StartServiceOrderCommand(id, 2, Ctx("test", "start", "same")), ct));
+
+        var complete = Command("complete-x", async (s, ct) => await s.Complete.Handle(
+            new CompleteServiceOrderCommand(id, 3, 120, clock.Today, Ctx("test", "complete-x", "same")), ct));
+        var reading = Command("reading-x", async (s, ct) => await s.RegisterReading.Handle(
+            new RegisterOdometerReadingCommand(vehicleId, 115, Ctx("test", "reading-x", "same")), ct));
+
+        await Task.WhenAll(complete, reading);
+
+        await using var db = Db();
+        Assert.Equal("Completed", await db.ExecuteScalarAsync<string>("SELECT State FROM dbo.Orders"));
+        Assert.Equal(120, await db.ExecuteScalarAsync<decimal>("SELECT Odometer FROM dbo.Vehicles"));
     }
 
     [SqlFact]
