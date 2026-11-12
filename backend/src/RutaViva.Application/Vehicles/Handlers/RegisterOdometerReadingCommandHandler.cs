@@ -19,7 +19,6 @@ public sealed class RegisterOdometerReadingCommandHandler(
         RegisterOdometerReadingCommand command,
         CancellationToken cancellationToken)
     {
-        // Bloqueo explícito del vehículo antes de leer/actualizar (MediatR e integración).
         await applicationLock.AcquireResourceLockAsync($"vehicle:{command.VehicleId:N}", cancellationToken);
 
         var vehicle = await vehicles.FindVehicleByIdAsync(command.VehicleId, cancellationToken);

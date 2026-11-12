@@ -1,9 +1,5 @@
 namespace RutaViva.Domain.Events;
 
-/// <summary>
-/// Fábrica de hechos persistibles. El almacenamiento Outbox sigue usando Type/Message
-/// para no romper lecturas existentes ni el contrato Angular.
-/// </summary>
 public static class DomainEventFactory
 {
     public static DomainEvent MaintenanceDueSoon(Guid routineId, Guid cycleId, string routineName) =>

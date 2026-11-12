@@ -2,10 +2,6 @@ using RutaViva.Domain.ValueObjects;
 
 namespace RutaViva.Domain.Aggregates.Vehicles;
 
-/// <summary>
-/// Raíz de agregado Vehículo.
-/// Protege identidad (placa), taller asignado y odómetro que nunca retrocede.
-/// </summary>
 public sealed class Vehicle : AggregateRoot
 {
     public string Plate { get; private set; } = "";
@@ -30,7 +26,6 @@ public sealed class Vehicle : AggregateRoot
         Odometer = odometer;
     }
 
-    /// <summary>Records a higher odometer reading; equal or lower readings are ignored without error.</summary>
     public bool RecordOdometerReading(Kilometres reportedOdometerKilometers)
     {
         if (reportedOdometerKilometers.IsLessOrEqual(Odometer))

@@ -10,7 +10,6 @@ using RutaViva.Infrastructure.Persistence.Models;
 
 namespace RutaViva.Infrastructure.Persistence.Repositories;
 
-/// <summary>Read-only dashboard projection (own connection, outside write UoW).</summary>
 public sealed class MaintenanceOverviewReader(SqlConnectionFactory factory, IClock clock)
     : IMaintenanceOverviewReader
 {

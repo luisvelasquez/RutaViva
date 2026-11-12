@@ -9,9 +9,6 @@ using RutaViva.Domain.Events;
 
 namespace RutaViva.Application.MaintenanceRoutines.Coordination;
 
-/// <summary>
-/// Coordina varias raíces cuando una rutina vence: evalúa el dominio y crea la orden si corresponde.
-/// </summary>
 public sealed class DueMaintenanceCoordinator(
     IServiceOrderRepository orders,
     IOutboxWriter outbox,

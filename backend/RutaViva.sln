@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11626.88 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
@@ -12,10 +12,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RutaViva.Domain", "src\RutaViva.Domain\RutaViva.Domain.csproj", "{027FED12-FB13-4F7F-B48B-D9AA40AE6F02}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RutaViva.Infrastructure", "src\RutaViva.Infrastructure\RutaViva.Infrastructure.csproj", "{C7E3283F-1D6A-42DA-88D7-AC3DDB31B4D3}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RutaViva.Tests", "tests\RutaViva.Tests\RutaViva.Tests.csproj", "{5A2D34E4-0F41-4281-BCB0-82D1496F5304}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -75,18 +71,6 @@ Global
 		{C7E3283F-1D6A-42DA-88D7-AC3DDB31B4D3}.Release|x64.Build.0 = Release|Any CPU
 		{C7E3283F-1D6A-42DA-88D7-AC3DDB31B4D3}.Release|x86.ActiveCfg = Release|Any CPU
 		{C7E3283F-1D6A-42DA-88D7-AC3DDB31B4D3}.Release|x86.Build.0 = Release|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Debug|x64.Build.0 = Debug|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Debug|x86.Build.0 = Debug|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Release|Any CPU.Build.0 = Release|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Release|x64.ActiveCfg = Release|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Release|x64.Build.0 = Release|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Release|x86.ActiveCfg = Release|Any CPU
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -96,6 +80,5 @@ Global
 		{07B66333-1916-4FAD-8053-18197713CBA8} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{027FED12-FB13-4F7F-B48B-D9AA40AE6F02} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{C7E3283F-1D6A-42DA-88D7-AC3DDB31B4D3} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
-		{5A2D34E4-0F41-4281-BCB0-82D1496F5304} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

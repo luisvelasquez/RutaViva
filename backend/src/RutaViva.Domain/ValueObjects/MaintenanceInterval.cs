@@ -1,6 +1,5 @@
 namespace RutaViva.Domain.ValueObjects;
 
-/// <summary>Intervalo por kilómetros, días o ambos. Con ambos, vence el primero que se cumpla.</summary>
 public sealed record MaintenanceInterval
 {
     public Kilometres? IntervalKilometres { get; }

@@ -1,9 +1,5 @@
 namespace RutaViva.Domain.ValueObjects;
 
-/// <summary>
-/// Kilometraje (odómetro o distancia recorrida). No negativo, hasta dos decimales. Comparación por valor.
-/// Sustituye el nombre Kilometres para cubrir ambos usos en el modelo.
-/// </summary>
 public readonly record struct Kilometres : IComparable<Kilometres>
 {
     public decimal Value { get; }

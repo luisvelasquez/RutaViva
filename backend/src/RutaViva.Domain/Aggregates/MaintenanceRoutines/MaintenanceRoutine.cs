@@ -52,7 +52,6 @@ public sealed class MaintenanceRoutine : AggregateRoot
             MarkChanged();
         }
 
-        // Salto directo a vencida: no se emite aviso tardío de «por vencer».
         if (next != MaintenanceStatus.DueSoon || NoticeRaised)
             return;
 
@@ -64,8 +63,10 @@ public sealed class MaintenanceRoutine : AggregateRoot
     {
         if (Interval.IsOverdue(travelled, elapsedDays))
             return MaintenanceStatus.Overdue;
+
         if (Interval.IsDueSoon(travelled, elapsedDays))
             return MaintenanceStatus.DueSoon;
+
         return MaintenanceStatus.Current;
     }
 
