@@ -33,7 +33,6 @@ public sealed class OutboxWriter(SqlUnitOfWork unitOfWork) : SqlRepositoryBase(u
             domainEvent.Type == DomainEventTypes.MaintenanceDueSoon
             && SqlUniqueness.IsViolation(ex, "UX_OutboxMessages_DueSoonNotice"))
         {
-            // Unique due-soon notice per cycle: filtered index absorbs insert races.
         }
     }
 }

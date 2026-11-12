@@ -14,7 +14,6 @@ public sealed class MaintenanceRoutineReadStore(SqlConnectionFactory factory) : 
         CancellationToken cancellationToken)
     {
         await using var connection = factory.Create();
-        // Ensure the vehicle exists before listing (404 for unknown vehicleId).
         var vehicleExists = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
             "SELECT COUNT(1) FROM dbo.Vehicles WHERE VehicleId = @vehicleId",
             new { vehicleId },

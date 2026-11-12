@@ -7,9 +7,6 @@ using RutaViva.Infrastructure.Persistence.Models;
 
 namespace RutaViva.Infrastructure.Persistence.Outbox;
 
-/// <summary>
-/// Publishes pending outbox messages. At-least-once redelivery is distinct from the unique due-soon notice.
-/// </summary>
 public sealed class SqlOutboxPublisher(
     SqlConnectionFactory factory,
     IClock clock,

@@ -2,7 +2,6 @@ using RutaViva.Application.Interfaces.Events;
 
 namespace RutaViva.Api.Workers;
 
-/// <summary>Publica Outbox pendiente. Reintentos independientes de la revisión diaria.</summary>
 public sealed class OutboxPublisherWorker(IServiceScopeFactory scopes, ILogger<OutboxPublisherWorker> logger)
     : BackgroundService
 {

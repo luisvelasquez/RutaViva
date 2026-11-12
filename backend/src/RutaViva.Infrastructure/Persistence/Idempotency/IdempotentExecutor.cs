@@ -8,10 +8,6 @@ using RutaViva.Domain;
 
 namespace RutaViva.Infrastructure.Persistence.Idempotency;
 
-/// <summary>
-/// Idempotencia durable (recibo + huella). Serializa con escapado relajado para que
-/// el replay reproduzca el mismo JSON que la primera respuesta (p. ej. +00:00).
-/// </summary>
 public sealed class IdempotentExecutor(
     IUnitOfWork unitOfWork,
     IIdempotencyStore store,
